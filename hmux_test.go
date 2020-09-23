@@ -189,6 +189,7 @@ func TestParams(t *testing.T) {
 		),
 	)
 	mux.Get("/y/:foo/", testHandler("trailing slash %s", "foo"))
+	mux.Get("/z/:f%6fo", testHandler("foo %s", "foo"))
 
 	testCases := []reqTest{
 		{"GET", "/a/b/c", "404"},
@@ -210,6 +211,7 @@ func TestParams(t *testing.T) {
 		{"GET", "/x/123", "/x/int64 int=123 int64=123"},
 		{"GET", "/y/123", "404"},
 		{"GET", "/y/123/", "trailing slash 123"},
+		{"GET", "/z/abc", "foo abc"},
 	}
 	testRequests(t, mux, testCases)
 }
@@ -234,6 +236,8 @@ func TestMalformedPattern(t *testing.T) {
 		{"/:x:str", "unknown parameter type"},
 		{"/:x:int", "unknown parameter type"},
 		{"/:x:", "unknown parameter type"},
+		{"/:x/:y/:x:int32", "duplicate parameter"},
+		{"/:x/:%78", "duplicate parameter"},
 	} {
 		mux := New()
 		err := mux.handle("GET", tt.pat, testHandler("x"))

@@ -237,6 +237,7 @@ func parsePattern(pat string) (pattern, error) {
 	// * It doesn't start or end with a /
 	// * It might be empty
 
+	params := make(map[string]struct{})
 	for pat != "" {
 		var part string
 		if i := strings.IndexByte(pat, '/'); i >= 0 {
@@ -247,6 +248,12 @@ func parsePattern(pat string) (pattern, error) {
 		seg, err := parseSegment(part)
 		if err != nil {
 			return p, err
+		}
+		if seg.isParam {
+			if _, ok := params[seg.s]; ok {
+				return p, fmt.Errorf("patterns contains duplicate parameter %q", seg.s)
+			}
+			params[seg.s] = struct{}{}
 		}
 		p.segs = append(p.segs, seg)
 	}

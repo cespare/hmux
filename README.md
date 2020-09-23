@@ -24,7 +24,6 @@ TODO
 
 ## TODO:
 
-* Reject duplicate parameters
 * Normalize/prefix panic messages
 * Handle OPTIONS requests automatically?
 * Respond with 405 Method Not Allowed automatically?

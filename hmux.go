@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path"
 	"sort"
 	"strconv"
 	"strings"
@@ -107,13 +108,33 @@ func (m *Mux) handle(method, pat string, h http.Handler) error {
 
 // ServeHTTP implements the http.Handler interface.
 func (m *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	// Redirect non-canonical paths.
+	if r.Method != http.MethodConnect {
+		if r.URL.RawPath == "" {
+			if targ, ok := shouldRedirect(r.URL.Path); ok {
+				u := *r.URL
+				u.Path = targ
+				http.Redirect(w, r, u.String(), http.StatusPermanentRedirect)
+				return
+			}
+		} else {
+			if targ, ok := shouldRedirect(r.URL.RawPath); ok {
+				u := *r.URL
+				u.RawPath = targ
+				u.Path = mustPathUnescape(targ)
+				http.Redirect(w, r, u.String(), http.StatusPermanentRedirect)
+				return
+			}
+		}
+	}
+
 	var opts matchOpts
-	path := r.URL.Path
+	pth := r.URL.Path
 	if r.URL.RawPath != "" {
 		opts |= optReencode
-		path = r.URL.RawPath
+		pth = r.URL.RawPath
 	}
-	h, p := m.handler(r.Method, path, opts)
+	h, p := m.handler(r.Method, pth, opts)
 	if h == nil {
 		http.NotFound(w, r)
 		return
@@ -129,15 +150,49 @@ func (m *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	h.ServeHTTP(w, r)
 }
 
-func (m *Mux) handler(method, path string, opts matchOpts) (http.Handler, *Params) {
+func shouldRedirect(pth string) (string, bool) {
+	if pth == "" {
+		return "/", true
+	}
+	if pth[0] != '/' {
+		pth = "/" + pth
+	}
+	// In the common case, there's no work to do.
+	// Optimize for that by scanning for disallowed segments first.
+	i := 1
+	for i < len(pth) {
+		n := strings.IndexByte(pth[i:], '/')
+		var seg string
+		if n < 0 {
+			seg = pth[i:]
+			i = len(pth)
+		} else {
+			seg = pth[i : i+n]
+			i += n + 1
+		}
+		switch seg {
+		case "", ".", "..":
+			// Need cleaning.
+			clean := path.Clean(pth)
+			// path.Clean removes the trailing slash.
+			if pth[len(pth)-1] == '/' && clean != "/" {
+				clean += "/"
+			}
+			return clean, true
+		}
+	}
+	return pth, false
+}
+
+func (m *Mux) handler(method, pth string, opts matchOpts) (http.Handler, *Params) {
 	var parts []string
-	path, trailingSlash := trimSuffix(path, "/")
+	pth, trailingSlash := trimSuffix(pth, "/")
 	if trailingSlash {
 		opts |= optTrailingSlash
 	}
-	path = strings.TrimPrefix(path, "/")
-	if path != "" {
-		parts = strings.Split(path, "/")
+	pth = strings.TrimPrefix(pth, "/")
+	if pth != "" {
+		parts = strings.Split(pth, "/")
 	}
 	if opts&optReencode != 0 {
 		for i, part := range parts {

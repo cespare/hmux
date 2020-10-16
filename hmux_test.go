@@ -9,6 +9,21 @@ import (
 	"testing"
 )
 
+func TestRedirects(t *testing.T) {
+	mux := New()
+	mux.Get("/abc", testHandler("abc"))
+	testCases := []reqTest{
+		{"GET", "/x/../abc", "308 /abc"},
+		{"GET", "/x/./abc", "308 /x/abc"},
+		{"GET", "/a//b/c", "308 /a/b/c"},
+		{"GET", "/a/b//c/", "308 /a/b/c/"},
+		{"GET", "//a/b/c//", "308 /a/b/c/"},
+		{"GET", "//a/b/c//", "308 /a/b/c/"},
+		{"GET", "/%2fa//%61/c/", "308 /%2fa/%61/c/"},
+	}
+	testRequests(t, mux, testCases)
+}
+
 func TestMatchingPriorities(t *testing.T) {
 	type testRule struct {
 		method string
@@ -295,7 +310,8 @@ func testRequests(t *testing.T, mux *Mux, tests []reqTest) {
 		r := httptest.NewRequest(tt.method, tt.path, nil)
 		mux.ServeHTTP(w, r)
 
-		if tt.want == "404" {
+		switch {
+		case tt.want == "404":
 			if w.Code == 200 {
 				t.Errorf("%s %s: got status 200 [%s] instead of 404",
 					tt.method, tt.path, w.Body)
@@ -303,17 +319,25 @@ func testRequests(t *testing.T, mux *Mux, tests []reqTest) {
 				t.Errorf("%s %s: got status %d instead of 404",
 					tt.method, tt.path, w.Code)
 			}
-			continue
-		}
-
-		if w.Code != 200 {
+		case strings.HasPrefix(tt.want, "308 "):
+			if w.Code != 308 {
+				t.Errorf("%s %s: got status %d instead of 308",
+					tt.method, tt.path, w.Code)
+				continue
+			}
+			targ := strings.TrimPrefix(tt.want, "308 ")
+			if got := w.Result().Header.Get("Location"); got != targ {
+				t.Errorf("%s %s: got 308 redirect to %q instead of %q",
+					tt.method, tt.path, got, targ)
+			}
+		case w.Code != 200:
 			t.Errorf("%s %s: got status %d instead of 200",
 				tt.method, tt.path, w.Code)
-			continue
-		}
-		got := w.Body.String()
-		if got != tt.want {
-			t.Errorf("%s %s: got %q; want %q", tt.method, tt.path, got, tt.want)
+		default:
+			got := w.Body.String()
+			if got != tt.want {
+				t.Errorf("%s %s: got %q; want %q", tt.method, tt.path, got, tt.want)
+			}
 		}
 	}
 }

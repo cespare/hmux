@@ -24,12 +24,10 @@ TODO
 
 ## TODO:
 
-* Normalize/prefix panic messages
 * Handle OPTIONS requests automatically?
 * Respond with 405 Method Not Allowed automatically?
 * File serving? (Or not needed?)
-* Normalize/clean paths and redirect
-  - Special handling for CONNECT?
+* Reject . and .. segments in paths
 * Flesh out package doc
   - examples
     * Nested muxes

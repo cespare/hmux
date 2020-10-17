@@ -168,6 +168,7 @@ func TestPathEncoding(t *testing.T) {
 	mux.Get("/abc/:foo/def", testHandler("%s", "foo"))
 	mux.Get("/xyz/*", testHandler("xyz %s", "*"))
 	mux.Get("/%61%2f%62c/:foo/def", testHandler("escape %s", "foo"))
+	mux.Get("/./a%2f/..", testHandler("non-canonical"))
 
 	testCases := []reqTest{
 		{"GET", "/abc/xyz/def", "xyz"},
@@ -178,6 +179,7 @@ func TestPathEncoding(t *testing.T) {
 		{"GET", "/xyz/a%2f%62", "xyz /a/b"},
 		{"GET", "/a%2f%62%63/x%2fy/d%65f", "escape x/y"},
 		{"GET", "/a/bc/x/def", "404"},
+		{"GET", "/%2E/a%2f/%2E%2E", "non-canonical"},
 	}
 	testRequests(t, mux, testCases)
 }

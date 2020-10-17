@@ -27,7 +27,6 @@ TODO
 * Handle OPTIONS requests automatically?
 * Respond with 405 Method Not Allowed automatically?
 * File serving? (Or not needed?)
-* Reject . and .. segments in paths
 * Flesh out package doc
   - examples
     * Nested muxes

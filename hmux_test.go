@@ -33,10 +33,10 @@ func TestMatchingPriorities(t *testing.T) {
 	var rules = []testRule{
 		{"GET", "/", testHandler("index")},
 		{"GET", "/x", testHandler("/x")},
+		{"POST", "/x", testHandler("post /x")},
 		{"GET", "/x/y", testHandler("/x/y")},
 		{"GET", "/:p/z", testHandler("/:p/z")},
 		{"GET", "/z/y", testHandler("/z/y")},
-		{"POST", "/x", testHandler("post /x")},
 		{"PUT", "/a/cats/:id", testHandler("put cat %s", "id")},
 		{"GET", "/a/cats/6", testHandler("cat 6")},
 		{"GET", "/a/cats/xyz", testHandler("cat xyz")},
@@ -49,14 +49,15 @@ func TestMatchingPriorities(t *testing.T) {
 
 	testCases := []reqTest{
 		{"GET", "/", "index"},
-		{"POST", "/", "404"},
+		{"POST", "/", "405 GET"},
 		{"GET", "/x", "/x"},
+		{"PUT", "/x", "405 GET, POST"},
 		{"GET", "/x/y", "/x/y"},
 		{"GET", "/x/z", "/:p/z"},
 		{"GET", "/y", "404"},
 		{"GET", "/z/y", "/z/y"},
 		{"POST", "/x", "post /x"},
-		{"POST", "/x/y", "404"},
+		{"POST", "/x/y", "405 GET"},
 		{"GET", "/a", "404"},
 		{"PUT", "/a/cats/xyz", "put cat xyz"},
 		{"GET", "/a/cats/6", "cat 6"},
@@ -98,6 +99,28 @@ func TestMatchingPriorities(t *testing.T) {
 	}
 }
 
+func Test405(t *testing.T) {
+	mux := New()
+	mux.Get("/x", testHandler("get /x"))
+	mux.Get("/x/y/:name", testHandler("get /x/y/%s", "name"))
+	mux.Put("/x/y/:name", testHandler("put /x/y/%s", "name"))
+	mux.Delete("/x/y/:name", testHandler("delete /x/y/%s", "name"))
+	mux.Handle("MYMETHOD", "/x/y/:name", testHandler("mymethod /x/y/%s", "name"))
+	mux.Get("/x/y/:name/blah", testHandler("get /x/y/%s/blah", "name"))
+
+	testCases := []reqTest{
+		{"GET", "/", "404"},
+		{"PUT", "/x", "405 GET"},
+		{"GET", "/x/y/z", "get /x/y/z"},
+		{"DELETE", "/x/y/z", "delete /x/y/z"},
+		{"MYMETHOD", "/x/y/z", "mymethod /x/y/z"},
+		{"POST", "/x/y/z", "405 DELETE, GET, MYMETHOD, PUT"},
+		{"GET", "/x/y/z/blah", "get /x/y/z/blah"},
+		{"PUT", "/x/y/z/blah", "405 GET"},
+	}
+	testRequests(t, mux, testCases)
+}
+
 func TestNonStandardMethod(t *testing.T) {
 	mux := New()
 	mux.Get("/x/y", testHandler("a"))
@@ -107,7 +130,7 @@ func TestNonStandardMethod(t *testing.T) {
 		{"GET", "/x/y", "a"},
 		{"MYMETHOD", "/x/y", "b"},
 		{"MYMETHOD", "/x", "404"},
-		{"PUT", "/x/y", "404"},
+		{"PUT", "/x/y", "405 GET, MYMETHOD"},
 	}
 	testRequests(t, mux, testCases)
 }
@@ -320,6 +343,17 @@ func testRequests(t *testing.T, mux *Mux, tests []reqTest) {
 			} else if w.Code != 404 {
 				t.Errorf("%s %s: got status %d instead of 404",
 					tt.method, tt.path, w.Code)
+			}
+		case strings.HasPrefix(tt.want, "405 "):
+			if w.Code != 405 {
+				t.Errorf("%s %s: got status %d instead of 405",
+					tt.method, tt.path, w.Code)
+				continue
+			}
+			allow := strings.TrimPrefix(tt.want, "405 ")
+			if got := w.Result().Header.Get("Allow"); got != allow {
+				t.Errorf("%s %s: got 405 response with Allow=%q instead of %q",
+					tt.method, tt.path, got, allow)
 			}
 		case strings.HasPrefix(tt.want, "308 "):
 			if w.Code != 308 {

@@ -98,7 +98,7 @@ func (m *Mux) handle(method, pat string, h http.Handler) error {
 	if method == "" {
 		ma.allMethods = h
 	} else {
-		ma.byMethod = map[string]http.Handler{method: h}
+		ma.addMethodHandler(method, h)
 	}
 	m.matchers = append(m.matchers, nil)
 	copy(m.matchers[i+1:], m.matchers[i:])
@@ -134,20 +134,25 @@ func (m *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		opts |= optReencode
 		pth = r.URL.RawPath
 	}
-	h, p := m.handler(r.Method, pth, opts)
-	if h == nil {
+	mr := m.handler(r.Method, pth, opts)
+	if mr.h == nil {
+		if mr.allow != "" {
+			w.Header().Set("Allow", mr.allow)
+			w.WriteHeader(http.StatusMethodNotAllowed)
+			return
+		}
 		http.NotFound(w, r)
 		return
 	}
-	if p != nil {
+	if mr.p != nil {
 		ctx := r.Context()
 		if p0 := RequestParams(ctx); p0 != nil {
-			p0.merge(p)
-			p = p0
+			p0.merge(mr.p)
+			mr.p = p0
 		}
-		r = r.WithContext(context.WithValue(ctx, paramKey, p))
+		r = r.WithContext(context.WithValue(ctx, paramKey, mr.p))
 	}
-	h.ServeHTTP(w, r)
+	mr.h.ServeHTTP(w, r)
 }
 
 func shouldRedirect(pth string) (string, bool) {
@@ -184,7 +189,7 @@ func shouldRedirect(pth string) (string, bool) {
 	return pth, false
 }
 
-func (m *Mux) handler(method, pth string, opts matchOpts) (http.Handler, *Params) {
+func (m *Mux) handler(method, pth string, opts matchOpts) matchResult {
 	var parts []string
 	pth, trailingSlash := trimSuffix(pth, "/")
 	if trailingSlash {
@@ -199,13 +204,18 @@ func (m *Mux) handler(method, pth string, opts matchOpts) (http.Handler, *Params
 			parts[i] = mustPathUnescape(part)
 		}
 	}
+	result := noMatch
 	for _, ma := range m.matchers {
-		h, p := ma.match(method, parts, opts)
-		if h != nil {
-			return h, p
+		mr := ma.match(method, parts, opts)
+		if mr.h != nil {
+			return mr
+		}
+		// Keep the first 405 result we get, if any.
+		if result == noMatch {
+			result = mr
 		}
 	}
-	return nil, nil
+	return result
 }
 
 type segment struct {
@@ -356,9 +366,10 @@ func (p pattern) less(p1 pattern) bool {
 }
 
 type matcher struct {
-	pat        pattern
-	byMethod   map[string]http.Handler
-	allMethods http.Handler
+	pat         pattern
+	byMethod    map[string]http.Handler
+	methodNames []string
+	allMethods  http.Handler
 }
 
 type matchOpts uint8
@@ -368,20 +379,35 @@ const (
 	optReencode
 )
 
-func (m *matcher) match(method string, parts []string, opts matchOpts) (http.Handler, *Params) {
+// A matchResult indicates how a matcher matches (or fails to match) a request.
+// There are three possibilities:
+//
+// 1. If the matcher matches the path and the method, h and p are set.
+// 2. If the matcher matches the path but not the method, allow is set to
+//    indicate the Allow header in the 405 response.
+// 3. If the matcher doesn't match at all, match returns noMatch.
+type matchResult struct {
+	h     http.Handler
+	p     *Params
+	allow string
+}
+
+var noMatch matchResult
+
+func (m *matcher) match(method string, parts []string, opts matchOpts) matchResult {
 	if opts&optTrailingSlash != 0 && !(m.pat.trailingSlash || m.pat.wildcard) {
-		return nil, nil
+		return noMatch
 	}
 	if opts&optTrailingSlash == 0 && m.pat.trailingSlash {
-		return nil, nil
+		return noMatch
 	}
 	if m.pat.wildcard {
 		if len(parts) < len(m.pat.segs) {
-			return nil, nil
+			return noMatch
 		}
 	} else {
 		if len(parts) != len(m.pat.segs) {
-			return nil, nil
+			return noMatch
 		}
 	}
 	var p *Params
@@ -393,7 +419,7 @@ func (m *matcher) match(method string, parts []string, opts matchOpts) (http.Han
 		if seg.isParam {
 			pr, ok := matchParam(seg, part, opts)
 			if !ok {
-				return nil, nil
+				return noMatch
 			}
 			if p == nil {
 				p = new(Params)
@@ -401,7 +427,7 @@ func (m *matcher) match(method string, parts []string, opts matchOpts) (http.Han
 			p.ps = append(p.ps, pr)
 		} else {
 			if part != seg.s {
-				return nil, nil
+				return noMatch
 			}
 		}
 	}
@@ -409,7 +435,7 @@ func (m *matcher) match(method string, parts []string, opts matchOpts) (http.Han
 		// The pattern "/x/*" should not match requests for "/x".
 		// (But it should match "/x/".)
 		if len(parts) == len(m.pat.segs) && opts&optTrailingSlash == 0 {
-			return nil, nil
+			return noMatch
 		}
 		if p == nil {
 			p = new(Params)
@@ -421,12 +447,12 @@ func (m *matcher) match(method string, parts []string, opts matchOpts) (http.Han
 		p.hasWildcard = true
 	}
 	if h, ok := m.byMethod[method]; ok {
-		return h, p
+		return matchResult{h: h, p: p}
 	}
 	if h := m.allMethods; h != nil {
-		return h, p
+		return matchResult{h: h, p: p}
 	}
-	return nil, nil
+	return matchResult{allow: strings.Join(m.methodNames, ", ")}
 }
 
 func mustPathUnescape(s string) string {
@@ -447,6 +473,10 @@ func (m *matcher) merge(method string, h http.Handler) bool {
 		m.allMethods = h
 		return true
 	}
+	return m.addMethodHandler(method, h)
+}
+
+func (m *matcher) addMethodHandler(method string, h http.Handler) (added bool) {
 	if _, ok := m.byMethod[method]; ok {
 		return false
 	}
@@ -454,6 +484,8 @@ func (m *matcher) merge(method string, h http.Handler) bool {
 		m.byMethod = make(map[string]http.Handler)
 	}
 	m.byMethod[method] = h
+	m.methodNames = append(m.methodNames, method)
+	sort.Strings(m.methodNames)
 	return true
 }
 

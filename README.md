@@ -25,14 +25,15 @@ TODO
 ## TODO:
 
 * Handle OPTIONS requests automatically?
-* Respond with 405 Method Not Allowed automatically?
 * File serving? (Or not needed?)
 * Flesh out package doc
   - examples
     * Nested muxes
     * File serving
+    * CORS OPTIONS
   - Exact precedence rules
   - Valid patterns (and panics)
   - All patterns start with /
   - Redirects
 * Flesh out README with links and short example
+* Separate types for rule construction and handler

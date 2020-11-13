@@ -24,7 +24,6 @@ TODO
 
 ## TODO:
 
-* Handle OPTIONS requests automatically?
 * File serving? (Or not needed?)
 * Flesh out package doc
   - examples
@@ -37,3 +36,4 @@ TODO
   - Redirects
 * Flesh out README with links and short example
 * Separate types for rule construction and handler
+  - Builder and Mux?

@@ -143,6 +143,7 @@ func TestNestedMuxes(t *testing.T) {
 	b0.Get("/b/:q", testHandler("d p=%s q=%s", "p", "q"))
 	b0.Get("/x%2fy/:foo", testHandler("escape %s", "foo"))
 	b0.Get("/c/:foo", testHandler("params %s %s", "p", "foo"))
+	b0.Get("/d/*", testHandler("* %s", "*"))
 	mux0 := b0.Build()
 
 	b1 := NewBuilder()
@@ -159,6 +160,7 @@ func TestNestedMuxes(t *testing.T) {
 		{"GET", "/y/b/z", "d p=y q=z"},
 		{"GET", "/x/x%2fy/%61%2f%62", "escape a/b"},
 		{"GET", "/%62%2fcd/c/e%66g%2f%68", "params b/cd efg/h"},
+		{"GET", "/y/d/alpha/bravo", "* /alpha/bravo"},
 	}
 	testRequests(t, b1.Build(), testCases)
 }
@@ -295,26 +297,37 @@ func TestMalformedPattern(t *testing.T) {
 }
 
 func TestHandleConflict(t *testing.T) {
+	type testRule struct {
+		method string
+		pat    string
+	}
 outer:
-	for _, pats := range [][]string{ // last pattern of sequence should conflict
-		{"/x", "/x"},
+	for _, rules := range [][]testRule{ // last pattern of sequence should conflict
+		{
+			{method: "GET", pat: "/x"},
+			{method: "GET", pat: "/x"},
+		},
+		{
+			{method: "", pat: "/x"},
+			{method: "", pat: "/x"},
+		},
 	} {
-		mux := NewBuilder()
+		b := NewBuilder()
 		h := testHandler("x")
-		for _, pat := range pats[:len(pats)-1] {
-			err := mux.handle("GET", pat, h)
+		for _, rule := range rules[:len(rules)-1] {
+			err := b.handle(rule.method, rule.pat, h)
 			if err != nil {
-				t.Errorf(`handle("GET", %q, h) (not last): got %s", err)`, pat, err)
+				t.Errorf(`handle(%q, %q, h) (not last): got %s", err)`, rule.method, rule.pat, err)
+				continue outer
 			}
-			continue outer
 		}
-		pat := pats[len(pats)-1]
-		err := mux.handle("GET", pat, h)
+		rule := rules[len(rules)-1]
+		err := b.handle(rule.method, rule.pat, h)
 		if err == nil {
-			t.Errorf(`handle("GET", %q, h) (last): got nil error; want conflict`, pat)
+			t.Errorf(`handle(%q, %q, h) (last): got nil error; want conflict`, rule.method, rule.pat)
 		}
 		if !strings.Contains(err.Error(), "conflicts with previously registered pattern") {
-			t.Errorf(`handle("GET", %q, h) (last): got %s; want conflict error`, pat, err)
+			t.Errorf(`handle(%q, %q, h) (last): got %s; want conflict error`, rule.method, rule.pat, err)
 		}
 	}
 }

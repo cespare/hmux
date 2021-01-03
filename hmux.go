@@ -570,8 +570,9 @@ func (m *matcher) merge(method string, h http.Handler) bool {
 		if m.allMethods != nil {
 			return false
 		}
-		m.allMethods = h
-		return true
+		// We shouldn't get here since we only try to merge matchers of
+		// the same priority.
+		panic("shouldn't happen")
 	}
 	return m.addMethodHandler(method, h)
 }

@@ -9,26 +9,26 @@ import (
 )
 
 func main() {
-	m := hmux.New()
+	b := hmux.NewBuilder()
 
-	m.Get("/", func(w http.ResponseWriter, r *http.Request) {
+	b.Get("/", func(w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte("index\n"))
 	})
-	m.Get("/x/y", func(w http.ResponseWriter, r *http.Request) {
+	b.Get("/x/y", func(w http.ResponseWriter, r *http.Request) {
 		fmt.Fprintln(w, "Hello from /x/y")
 	})
-	m.Get("/:foo:int64/z", func(w http.ResponseWriter, r *http.Request) {
+	b.Get("/:foo:int64/z", func(w http.ResponseWriter, r *http.Request) {
 		p := hmux.RequestParams(r.Context())
 		fmt.Fprintf(w, "Hello: %d\n", p.Int64("foo"))
 	})
-	m.Get("/x/:foo", func(w http.ResponseWriter, r *http.Request) {
+	b.Get("/x/:foo", func(w http.ResponseWriter, r *http.Request) {
 		p := hmux.RequestParams(r.Context())
 		fmt.Fprintf(w, "Hello: %s\n", p.Get("foo"))
 	})
-	m.Get("/x/*", func(w http.ResponseWriter, r *http.Request) {
+	b.Get("/x/*", func(w http.ResponseWriter, r *http.Request) {
 		p := hmux.RequestParams(r.Context())
 		fmt.Fprintf(w, "Hello wildcard: %s\n", p.Wildcard())
 	})
 
-	log.Fatal(http.ListenAndServe("localhost:8888", m))
+	log.Fatal(http.ListenAndServe("localhost:8888", b.Build()))
 }

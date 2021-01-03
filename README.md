@@ -21,6 +21,10 @@ TODO
 	   5. wildcard
 	2. Depth of match (more segments wins)
 	3. Specific method vs. catch-all
+* Instead of the two-phases-of-operation thing (where you need to add rules
+  before using the mux), which raises questions about what the acceptable use
+  is, use a self-explanatory API with separate Builder and Mux types. This also
+  creates a natural point at which to build a trie.
 
 ## TODO:
 
@@ -35,5 +39,3 @@ TODO
   - All patterns start with /
   - Redirects
 * Flesh out README with links and short example
-* Separate types for rule construction and handler
-  - Builder and Mux?

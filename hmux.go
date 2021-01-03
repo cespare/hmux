@@ -16,67 +16,61 @@ import (
 	"strings"
 )
 
-// Mux is an HTTP request multiplexer. It matches the URL path and HTTP method
-// of each incoming request to a list of registered rules and calls the handler
-// that most closely matches the request. It supplies path-based parameters
-// named by the matched rule via the HTTP request context.
-//
-// A Mux has two phases of operation: first, the rules are provided using Handle
-// and related helper methods (Get, Post, and so on); second, the mux is used to
-// serve HTTP requests. It is not valid to modify the rules once the mux has
-// been used for serving HTTP requests and this may lead to data races or
-// panics.
-type Mux struct {
+// A Builder constructs a Mux. Rules are added to the Builder by using Handle
+// and related helper methods (Get, Post, and so on). After all the rules have
+// been added, Build creates the Mux which uses those rules to route incoming
+// requests.
+type Builder struct {
 	matchers []*matcher
 }
 
-// New creates and returns a new Mux.
-func New() *Mux {
-	return &Mux{}
+// NewBuilder creates and returns a new Mux.
+func NewBuilder() *Builder {
+	return &Builder{}
 }
 
 // Get registers a handler for GET requests using the given path pattern.
 // Get panics if this rule is the same as a previously registered rule.
-func (m *Mux) Get(pat string, h http.HandlerFunc) {
-	m.Handle(http.MethodGet, pat, h)
+func (b *Builder) Get(pat string, h http.HandlerFunc) {
+	b.Handle(http.MethodGet, pat, h)
 }
 
 // Post registers a handler for POST requests using the given path pattern.
 // Post panics if this rule is the same as a previously registered rule.
-func (m *Mux) Post(pat string, h http.HandlerFunc) {
-	m.Handle(http.MethodPost, pat, h)
+func (b *Builder) Post(pat string, h http.HandlerFunc) {
+	b.Handle(http.MethodPost, pat, h)
 }
 
 // Put registers a handler for PUT requests using the given path pattern.
 // Put panics if this rule is the same as a previously registered rule.
-func (m *Mux) Put(pat string, h http.HandlerFunc) {
-	m.Handle(http.MethodPut, pat, h)
+func (b *Builder) Put(pat string, h http.HandlerFunc) {
+	b.Handle(http.MethodPut, pat, h)
 }
 
 // Delete registers a handler for DELETE requests using the given path pattern.
 // Delete panics if this rule is the same as a previously registered rule.
-func (m *Mux) Delete(pat string, h http.HandlerFunc) {
-	m.Handle(http.MethodDelete, pat, h)
+func (b *Builder) Delete(pat string, h http.HandlerFunc) {
+	b.Handle(http.MethodDelete, pat, h)
 }
 
 // Head registers a handler for HEAD requests using the given path pattern.
 // Head panics if this rule is the same as a previously registered rule.
-func (m *Mux) Head(pat string, h http.HandlerFunc) {
-	m.Handle(http.MethodHead, pat, h)
+func (b *Builder) Head(pat string, h http.HandlerFunc) {
+	b.Handle(http.MethodHead, pat, h)
 }
 
 // Handle registers a handler for the given HTTP method and path pattern.
 // If method is the empty string, the handler is registered for all HTTP methods.
 // Handle panics if this rule is the same as a previously registered rule.
-func (m *Mux) Handle(method, pat string, h http.Handler) {
-	if err := m.handle(method, pat, h); err != nil {
+func (b *Builder) Handle(method, pat string, h http.Handler) {
+	if err := b.handle(method, pat, h); err != nil {
 		panic("hmux: " + err.Error())
 	}
 }
 
 var errNilHandler = errors.New("Handle called with nil handler")
 
-func (m *Mux) handle(method, pat string, h http.Handler) error {
+func (b *Builder) handle(method, pat string, h http.Handler) error {
 	if h == nil {
 		return errNilHandler
 	}
@@ -84,12 +78,12 @@ func (m *Mux) handle(method, pat string, h http.Handler) error {
 	if err != nil {
 		return err
 	}
-	i := sort.Search(len(m.matchers), func(i int) bool {
-		return !p.less(m.matchers[i].pat)
+	i := sort.Search(len(b.matchers), func(i int) bool {
+		return !p.less(b.matchers[i].pat)
 	})
-	if i < len(m.matchers) && !m.matchers[i].pat.less(p) {
-		// segs has the same priority as m.matchers[i].segs
-		if !m.matchers[i].merge(method, h) {
+	if i < len(b.matchers) && !b.matchers[i].pat.less(p) {
+		// segs has the same priority as b.matchers[i].segs
+		if !b.matchers[i].merge(method, h) {
 			return fmt.Errorf("%s %q conflicts with previously registered pattern", method, pat)
 		}
 		return nil
@@ -100,10 +94,32 @@ func (m *Mux) handle(method, pat string, h http.Handler) error {
 	} else {
 		ma.addMethodHandler(method, h)
 	}
-	m.matchers = append(m.matchers, nil)
-	copy(m.matchers[i+1:], m.matchers[i:])
-	m.matchers[i] = ma
+	b.matchers = append(b.matchers, nil)
+	copy(b.matchers[i+1:], b.matchers[i:])
+	b.matchers[i] = ma
 	return nil
+}
+
+// Build creates a Mux using the current rules in b. The Mux does not share
+// state with b: future changes to b will not affect the built Mux and other
+// Muxes may be built from b later (possibly after adding more rules).
+func (b *Builder) Build() *Mux {
+	m := &Mux{matchers: make([]*matcher, len(b.matchers))}
+	for i, ma := range b.matchers {
+		m.matchers[i] = ma.clone()
+	}
+	return m
+}
+
+// Mux is an HTTP request multiplexer. It matches the URL path and HTTP method
+// of each incoming request to a list of registered rules and calls the handler
+// that most closely matches the request. It supplies path-based parameters
+// named by the matched rule via the HTTP request context.
+//
+// A Mux is constructed by adding rules to a Builder. The Mux's rules are static
+// once it is built.
+type Mux struct {
+	matchers []*matcher
 }
 
 // ServeHTTP implements the http.Handler interface.
@@ -370,6 +386,16 @@ type matcher struct {
 	byMethod    map[string]http.Handler
 	methodNames []string
 	allMethods  http.Handler
+}
+
+func (m *matcher) clone() *matcher {
+	m1 := *m
+	m1.byMethod = make(map[string]http.Handler)
+	for k, v := range m.byMethod {
+		m1.byMethod[k] = v
+	}
+	m1.methodNames = append([]string(nil), m.methodNames...)
+	return &m1
 }
 
 type matchOpts uint8

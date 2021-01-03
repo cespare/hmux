@@ -10,8 +10,8 @@ import (
 )
 
 func TestRedirects(t *testing.T) {
-	mux := New()
-	mux.Get("/abc", testHandler("abc"))
+	b := NewBuilder()
+	b.Get("/abc", testHandler("abc"))
 	testCases := []reqTest{
 		{"GET", "/x/../abc", "308 /abc"},
 		{"GET", "/x/./abc", "308 /x/abc"},
@@ -21,7 +21,7 @@ func TestRedirects(t *testing.T) {
 		{"GET", "//a/b/c//", "308 /a/b/c/"},
 		{"GET", "/%2fa//%61/c/", "308 /%2fa/%61/c/"},
 	}
-	testRequests(t, mux, testCases)
+	testRequests(t, b.Build(), testCases)
 }
 
 func TestMatchingPriorities(t *testing.T) {
@@ -83,12 +83,12 @@ func TestMatchingPriorities(t *testing.T) {
 				rules1[i], rules1[j] = rules1[j], rules1[i]
 			})
 		}
-		mux := New()
+		b := NewBuilder()
 		for _, rule := range rules1 {
-			mux.Handle(rule.method, rule.pat, rule.h)
+			b.Handle(rule.method, rule.pat, rule.h)
 		}
 
-		testRequests(t, mux, testCases)
+		testRequests(t, b.Build(), testCases)
 
 		if t.Failed() {
 			if i > 0 {
@@ -100,13 +100,13 @@ func TestMatchingPriorities(t *testing.T) {
 }
 
 func Test405(t *testing.T) {
-	mux := New()
-	mux.Get("/x", testHandler("get /x"))
-	mux.Get("/x/y/:name", testHandler("get /x/y/%s", "name"))
-	mux.Put("/x/y/:name", testHandler("put /x/y/%s", "name"))
-	mux.Delete("/x/y/:name", testHandler("delete /x/y/%s", "name"))
-	mux.Handle("MYMETHOD", "/x/y/:name", testHandler("mymethod /x/y/%s", "name"))
-	mux.Get("/x/y/:name/blah", testHandler("get /x/y/%s/blah", "name"))
+	b := NewBuilder()
+	b.Get("/x", testHandler("get /x"))
+	b.Get("/x/y/:name", testHandler("get /x/y/%s", "name"))
+	b.Put("/x/y/:name", testHandler("put /x/y/%s", "name"))
+	b.Delete("/x/y/:name", testHandler("delete /x/y/%s", "name"))
+	b.Handle("MYMETHOD", "/x/y/:name", testHandler("mymethod /x/y/%s", "name"))
+	b.Get("/x/y/:name/blah", testHandler("get /x/y/%s/blah", "name"))
 
 	testCases := []reqTest{
 		{"GET", "/", "404"},
@@ -118,13 +118,13 @@ func Test405(t *testing.T) {
 		{"GET", "/x/y/z/blah", "get /x/y/z/blah"},
 		{"PUT", "/x/y/z/blah", "405 GET"},
 	}
-	testRequests(t, mux, testCases)
+	testRequests(t, b.Build(), testCases)
 }
 
 func TestNonStandardMethod(t *testing.T) {
-	mux := New()
-	mux.Get("/x/y", testHandler("a"))
-	mux.Handle("MYMETHOD", "/x/y", testHandler("b"))
+	b := NewBuilder()
+	b.Get("/x/y", testHandler("a"))
+	b.Handle("MYMETHOD", "/x/y", testHandler("b"))
 
 	testCases := []reqTest{
 		{"GET", "/x/y", "a"},
@@ -132,21 +132,22 @@ func TestNonStandardMethod(t *testing.T) {
 		{"MYMETHOD", "/x", "404"},
 		{"PUT", "/x/y", "405 GET, MYMETHOD"},
 	}
-	testRequests(t, mux, testCases)
+	testRequests(t, b.Build(), testCases)
 }
 
 func TestNestedMuxes(t *testing.T) {
-	mux0 := New()
-	mux0.Get("/x", testHandler("a"))
-	mux0.Get("/y", testHandler("b")) // shadowed
-	mux0.Get("/a/:p", testHandler("c %s", "p"))
-	mux0.Get("/b/:q", testHandler("d p=%s q=%s", "p", "q"))
+	b0 := NewBuilder()
+	b0.Get("/x", testHandler("a"))
+	b0.Get("/y", testHandler("b")) // shadowed
+	b0.Get("/a/:p", testHandler("c %s", "p"))
+	b0.Get("/b/:q", testHandler("d p=%s q=%s", "p", "q"))
+	mux0 := b0.Build()
 
-	mux1 := New()
-	mux1.Get("/x/y", testHandler("f"))
-	mux1.Get("/x/:p:int32", testHandler("g %s", "p"))
-	mount(mux1, "/x/*", mux0)
-	mount(mux1, "/:p/*", mux0)
+	b1 := NewBuilder()
+	b1.Get("/x/y", testHandler("f"))
+	b1.Get("/x/:p:int32", testHandler("g %s", "p"))
+	mount(b1, "/x/*", mux0)
+	mount(b1, "/:p/*", mux0)
 
 	testCases := []reqTest{
 		{"GET", "/x/y", "f"},
@@ -155,23 +156,23 @@ func TestNestedMuxes(t *testing.T) {
 		{"GET", "/y/a/z", "c z"},
 		{"GET", "/y/b/z", "d p=y q=z"},
 	}
-	testRequests(t, mux1, testCases)
+	testRequests(t, b1.Build(), testCases)
 }
 
-func mount(mux *Mux, pat string, h http.Handler) {
+func mount(b *Builder, pat string, h http.Handler) {
 	prefixHandler := func(w http.ResponseWriter, r *http.Request) {
 		r.URL.Path = RequestParams(r.Context()).Wildcard()
 		h.ServeHTTP(w, r)
 	}
-	mux.Handle("", pat, http.HandlerFunc(prefixHandler))
+	b.Handle("", pat, http.HandlerFunc(prefixHandler))
 }
 
 func TestSlashMatching(t *testing.T) {
-	mux := New()
-	mux.Get("/", testHandler("index"))
-	mux.Get("/hello/", testHandler("hello"))
-	mux.Get("/world", testHandler("world"))
-	mux.Get("/wild/*", testHandler("wild"))
+	b := NewBuilder()
+	b.Get("/", testHandler("index"))
+	b.Get("/hello/", testHandler("hello"))
+	b.Get("/world", testHandler("world"))
+	b.Get("/wild/*", testHandler("wild"))
 
 	testCases := []reqTest{
 		{"GET", "/", "index"},
@@ -183,15 +184,15 @@ func TestSlashMatching(t *testing.T) {
 		{"GET", "/wild/", "wild"},
 		{"GET", "/wild/a/b/c", "wild"},
 	}
-	testRequests(t, mux, testCases)
+	testRequests(t, b.Build(), testCases)
 }
 
 func TestPathEncoding(t *testing.T) {
-	mux := New()
-	mux.Get("/abc/:foo/def", testHandler("%s", "foo"))
-	mux.Get("/xyz/*", testHandler("xyz %s", "*"))
-	mux.Get("/%61%2f%62c/:foo/def", testHandler("escape %s", "foo"))
-	mux.Get("/./a%2f/..", testHandler("non-canonical"))
+	b := NewBuilder()
+	b.Get("/abc/:foo/def", testHandler("%s", "foo"))
+	b.Get("/xyz/*", testHandler("xyz %s", "*"))
+	b.Get("/%61%2f%62c/:foo/def", testHandler("escape %s", "foo"))
+	b.Get("/./a%2f/..", testHandler("non-canonical"))
 
 	testCases := []reqTest{
 		{"GET", "/abc/xyz/def", "xyz"},
@@ -204,13 +205,13 @@ func TestPathEncoding(t *testing.T) {
 		{"GET", "/a/bc/x/def", "404"},
 		{"GET", "/%2E/a%2f/%2E%2E", "non-canonical"},
 	}
-	testRequests(t, mux, testCases)
+	testRequests(t, b.Build(), testCases)
 }
 
 func TestParams(t *testing.T) {
-	mux := New()
-	mux.Get("/:string:string", testHandler("string %s", "string"))
-	mux.Get(
+	b := NewBuilder()
+	b.Get("/:string:string", testHandler("string %s", "string"))
+	b.Get(
 		"/:int32:int32",
 		testHandler(
 			"int32 int=%d int32=%d int64=%d",
@@ -219,8 +220,8 @@ func TestParams(t *testing.T) {
 			"int32:int64",
 		),
 	)
-	mux.Get("/:int64:int64", testHandler("int64 %d", "int64:int64"))
-	mux.Get(
+	b.Get("/:int64:int64", testHandler("int64 %d", "int64:int64"))
+	b.Get(
 		"/x/:int64:int64",
 		testHandler(
 			"/x/int64 int=%d int64=%d",
@@ -228,8 +229,8 @@ func TestParams(t *testing.T) {
 			"int64:int64",
 		),
 	)
-	mux.Get("/y/:foo/", testHandler("trailing slash %s", "foo"))
-	mux.Get("/z/:f%6fo", testHandler("foo %s", "foo"))
+	b.Get("/y/:foo/", testHandler("trailing slash %s", "foo"))
+	b.Get("/z/:f%6fo", testHandler("foo %s", "foo"))
 
 	testCases := []reqTest{
 		{"GET", "/a/b/c", "404"},
@@ -253,7 +254,7 @@ func TestParams(t *testing.T) {
 		{"GET", "/y/123/", "trailing slash 123"},
 		{"GET", "/z/abc", "foo abc"},
 	}
-	testRequests(t, mux, testCases)
+	testRequests(t, b.Build(), testCases)
 }
 
 func TestMalformedPattern(t *testing.T) {
@@ -279,7 +280,7 @@ func TestMalformedPattern(t *testing.T) {
 		{"/:x/:y/:x:int32", "duplicate parameter"},
 		{"/:x/:%78", "duplicate parameter"},
 	} {
-		mux := New()
+		mux := NewBuilder()
 		err := mux.handle("GET", tt.pat, testHandler("x"))
 		if err == nil {
 			t.Errorf(`handle("GET", %q, h): got nil; want %q`, tt.pat, tt.want)
@@ -302,7 +303,7 @@ outer:
 	for _, pats := range [][]string{ // last pattern of sequence should conflict
 		{"/x", "/x"},
 	} {
-		mux := New()
+		mux := NewBuilder()
 		h := testHandler("x")
 		for _, pat := range pats[:len(pats)-1] {
 			err := mux.handle("GET", pat, h)

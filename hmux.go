@@ -68,16 +68,90 @@ func (b *Builder) Handle(method, pat string, h http.Handler) {
 	}
 }
 
-var errNilHandler = errors.New("Handle called with nil handler")
-
 func (b *Builder) handle(method, pat string, h http.Handler) error {
 	if h == nil {
-		return errNilHandler
+		return errors.New("Handle called with nil handler")
 	}
 	p, err := parsePattern(pat)
 	if err != nil {
 		return err
 	}
+	return b.addHandler(method, pat, p, h)
+}
+
+// Prefix registers a handler at the given prefix pattern.
+// This is similar to calling Handle with method as "" except that the handler
+// is called with a modified request where the matched prefix is removed from
+// the beginning of the path.
+//
+// For example, suppose this method is called as
+//
+//   b.Prefix("/sub", h)
+//
+// Then if a request arrives with the path "/sub/x/y", the handler h sees a
+// request with a path "/x/y".
+//
+// Whether pat ends with * or not, Prefix interprets it as a wildcard pattern.
+// So the example above would be the same whether the pattern had been given as
+// "/sub", "/sub/", or "/sub/*".
+func (b *Builder) Prefix(pat string, h http.Handler) {
+	if h == nil {
+		panic("hmux: Prefix called with nil handler")
+	}
+	p, err := parsePattern(pat)
+	if err != nil {
+		panic("hmux: " + err.Error())
+	}
+	p.trailingSlash = false
+	p.wildcard = true
+	ph := prefixHandler{
+		h:    h,
+		skip: len(p.segs),
+	}
+	if err := b.addHandler("", pat, p, ph); err != nil {
+		panic("hmux: " + err.Error())
+	}
+}
+
+type prefixHandler struct {
+	h    http.Handler
+	skip int // how many prefix segments to remove
+}
+
+func (h prefixHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	r1 := new(http.Request)
+	*r1 = *r
+	r1.URL = h.trimPrefix(r.URL)
+	h.h.ServeHTTP(w, r1)
+}
+
+func (h prefixHandler) trimPrefix(u *url.URL) *url.URL {
+	u1 := new(url.URL)
+	*u1 = *u
+	if u.RawPath == "" {
+		u1.Path = skipPrefix(u.Path, h.skip)
+		return u1
+	}
+	u1.RawPath = skipPrefix(u.RawPath, h.skip)
+	u1.Path = mustPathUnescape(u1.RawPath)
+	return u1
+}
+
+func skipPrefix(s string, skip int) string {
+	if !strings.HasPrefix(s, "/") {
+		s = "/" + s
+	}
+	for i := 0; i < skip; i++ {
+		j := strings.IndexByte(s[1:], '/')
+		if j < 0 {
+			panic("skip larger than number of prefix segments")
+		}
+		s = s[j+1:]
+	}
+	return s
+}
+
+func (b *Builder) addHandler(method, pat string, p pattern, h http.Handler) error {
 	i := sort.Search(len(b.matchers), func(i int) bool {
 		return !p.less(b.matchers[i].pat)
 	})

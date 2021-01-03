@@ -141,13 +141,15 @@ func TestNestedMuxes(t *testing.T) {
 	b0.Get("/y", testHandler("b")) // shadowed
 	b0.Get("/a/:p", testHandler("c %s", "p"))
 	b0.Get("/b/:q", testHandler("d p=%s q=%s", "p", "q"))
+	b0.Get("/x%2fy/:foo", testHandler("escape %s", "foo"))
+	b0.Get("/c/:foo", testHandler("params %s %s", "p", "foo"))
 	mux0 := b0.Build()
 
 	b1 := NewBuilder()
 	b1.Get("/x/y", testHandler("f"))
 	b1.Get("/x/:p:int32", testHandler("g %s", "p"))
-	mount(b1, "/x/*", mux0)
-	mount(b1, "/:p/*", mux0)
+	b1.Prefix("/x/", mux0)
+	b1.Prefix("/:p/", mux0)
 
 	testCases := []reqTest{
 		{"GET", "/x/y", "f"},
@@ -155,16 +157,10 @@ func TestNestedMuxes(t *testing.T) {
 		{"GET", "/x/x", "a"},
 		{"GET", "/y/a/z", "c z"},
 		{"GET", "/y/b/z", "d p=y q=z"},
+		{"GET", "/x/x%2fy/%61%2f%62", "escape a/b"},
+		{"GET", "/%62%2fcd/c/e%66g%2f%68", "params b/cd efg/h"},
 	}
 	testRequests(t, b1.Build(), testCases)
-}
-
-func mount(b *Builder, pat string, h http.Handler) {
-	prefixHandler := func(w http.ResponseWriter, r *http.Request) {
-		r.URL.Path = RequestParams(r.Context()).Wildcard()
-		h.ServeHTTP(w, r)
-	}
-	b.Handle("", pat, http.HandlerFunc(prefixHandler))
 }
 
 func TestSlashMatching(t *testing.T) {

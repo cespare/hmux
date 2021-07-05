@@ -24,7 +24,7 @@ type Builder struct {
 	matchers []*matcher
 }
 
-// NewBuilder creates and returns a new Mux.
+// NewBuilder creates a new Builder.
 func NewBuilder() *Builder {
 	return &Builder{}
 }

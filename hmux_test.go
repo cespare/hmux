@@ -188,6 +188,7 @@ func TestSlashMatching(t *testing.T) {
 func TestPathEncoding(t *testing.T) {
 	b := NewBuilder()
 	b.Get("/abc/:foo/def", testHandler("%s", "foo"))
+	b.Get("/%3aparam%3aint32/foo", testHandler("fake param"))
 	b.Get("/xyz/*", testHandler("xyz %s", "*"))
 	b.Get("/%61%2f%62c/:foo/def", testHandler("escape %s", "foo"))
 	b.Get("/./a%2f/..", testHandler("non-canonical"))
@@ -202,6 +203,7 @@ func TestPathEncoding(t *testing.T) {
 		{"GET", "/a%2f%62%63/x%2fy/d%65f", "escape x/y"},
 		{"GET", "/a/bc/x/def", "404"},
 		{"GET", "/%2E/a%2f/%2E%2E", "non-canonical"},
+		{"GET", "/:param:int32/foo", "fake param"},
 	}
 	testRequests(t, b.Build(), testCases)
 }
@@ -228,7 +230,7 @@ func TestParams(t *testing.T) {
 		),
 	)
 	b.Get("/y/:foo/", testHandler("trailing slash %s", "foo"))
-	b.Get("/z/:f%6fo", testHandler("foo %s", "foo"))
+	b.Get("/z/:f%6fo", testHandler("foo %s", "f%6fo")) // param name isn't escaped
 
 	testCases := []reqTest{
 		{"GET", "/a/b/c", "404"},
@@ -276,7 +278,6 @@ func TestMalformedPattern(t *testing.T) {
 		{"/:x:int", "unknown parameter type"},
 		{"/:x:", "unknown parameter type"},
 		{"/:x/:y/:x:int32", "duplicate parameter"},
-		{"/:x/:%78", "duplicate parameter"},
 	} {
 		mux := NewBuilder()
 		err := mux.handle("GET", tt.pat, testHandler("x"))

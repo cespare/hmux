@@ -207,14 +207,12 @@ func (m *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 				http.Redirect(w, r, u.String(), http.StatusPermanentRedirect)
 				return
 			}
-		} else {
-			if targ, ok := shouldRedirect(r.URL.RawPath); ok {
-				u := *r.URL
-				u.RawPath = targ
-				u.Path = mustPathUnescape(targ)
-				http.Redirect(w, r, u.String(), http.StatusPermanentRedirect)
-				return
-			}
+		} else if targ, ok := shouldRedirect(r.URL.RawPath); ok {
+			u := *r.URL
+			u.RawPath = targ
+			u.Path = mustPathUnescape(targ)
+			http.Redirect(w, r, u.String(), http.StatusPermanentRedirect)
+			return
 		}
 	}
 
@@ -325,15 +323,14 @@ func parseSegment(s string) (segment, error) {
 	if strings.Contains(s, "*") {
 		return seg, errSegmentStar
 	}
-	// FIXME: Document this and explain.
-	// (It's needed so we can match literal / in path segments.)
-	s, err := url.PathUnescape(s)
-	if err != nil {
-		return seg, err
-	}
 	if s[0] != ':' {
-		seg.s = s
-		return seg, nil
+		// Unescape the segment because rules are matched against
+		// unescaped paths. For example: if we want to match an escaped
+		// /, then the rule contains %2f and the request also contains
+		// %2f.
+		var err error
+		seg.s, err = url.PathUnescape(s)
+		return seg, err
 	}
 	s = s[1:]
 	if s == "" {

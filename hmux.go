@@ -693,6 +693,8 @@ func (p *Params) get(name string) param {
 //
 //   p.Get("name")
 //
+// Note that, by construction, a parameter value cannot be empty, so Get never
+// returns the empty string.
 func (p *Params) Get(name string) string {
 	return p.get(name).val
 }

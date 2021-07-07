@@ -185,6 +185,47 @@ func TestSlashMatching(t *testing.T) {
 	testRequests(t, b.Build(), testCases)
 }
 
+func TestWildcard(t *testing.T) {
+	b := NewBuilder()
+	b.Get("/", testHandler("index"))
+	b.Get("/*", testHandler("wild %s", "*"))
+
+	testCases := []reqTest{
+		{"GET", "/", "index"},
+		{"GET", "/a/b", "wild /a/b"},
+	}
+	testRequests(t, b.Build(), testCases)
+}
+
+func TestPrefix(t *testing.T) {
+	b := NewBuilder()
+	b.Get("/", testHandler("index"))
+	b.Prefix("/", testHandler("/ prefix %s", "*"))
+	b.Prefix("/sub0", testHandler("/sub0 prefix %s", "*"))
+	b.Prefix("/sub1/", testHandler("/sub1 prefix %s", "*"))
+	b.Prefix("/sub2/*", testHandler("/sub2 prefix %s", "*"))
+
+	testCases := []reqTest{
+		{"GET", "/", "index"},
+		{"GET", "/a/b", "/ prefix /a/b"},
+		{"POST", "/", "/ prefix /"},
+		{"POST", "/a/b", "/ prefix /a/b"},
+		{"GET", "/sub0", "/ prefix /sub0"},
+		{"GET", "/sub1", "/ prefix /sub1"},
+		{"GET", "/sub2", "/ prefix /sub2"},
+		{"GET", "/sub0xyz", "/ prefix /sub0xyz"},
+		{"GET", "/sub1xyz", "/ prefix /sub1xyz"},
+		{"GET", "/sub2xyz", "/ prefix /sub2xyz"},
+		{"GET", "/sub0/", "/sub0 prefix /"},
+		{"GET", "/sub1/", "/sub1 prefix /"},
+		{"GET", "/sub2/", "/sub2 prefix /"},
+		{"GET", "/sub0/a/b", "/sub0 prefix /a/b"},
+		{"GET", "/sub1/a/b", "/sub1 prefix /a/b"},
+		{"GET", "/sub2/a/b", "/sub2 prefix /a/b"},
+	}
+	testRequests(t, b.Build(), testCases)
+}
+
 func TestPathEncoding(t *testing.T) {
 	b := NewBuilder()
 	b.Get("/abc/:foo/def", testHandler("%s", "foo"))
@@ -230,9 +271,20 @@ func TestParams(t *testing.T) {
 		),
 	)
 	b.Get("/y/:foo/", testHandler("trailing slash %s", "foo"))
+	b.Get("/yy/:foo", testHandler("no trailing slash %s", "foo"))
 	b.Get("/z/:f%6fo", testHandler("foo %s", "f%6fo")) // param name isn't escaped
+	b.Get(
+		"/multi/:alpha/0/:beta/1/:gamma",
+		testHandler(
+			"multi alpha=%s beta=%s gamma=%s",
+			"alpha",
+			"beta",
+			"gamma",
+		),
+	)
 
 	testCases := []reqTest{
+		{"GET", "/", "404"},
 		{"GET", "/a/b/c", "404"},
 		{"GET", "/abc", "string abc"},
 		{"GET", "/abc123", "string abc123"},
@@ -252,6 +304,11 @@ func TestParams(t *testing.T) {
 		{"GET", "/x/123", "/x/int64 int=123 int64=123"},
 		{"GET", "/y/123", "404"},
 		{"GET", "/y/123/", "trailing slash 123"},
+		{"GET", "/yy", "string yy"},
+		{"GET", "/yy/", "404"},
+		{"GET", "/yy/123", "no trailing slash 123"},
+		{"GET", "/multi/a/0/b/1/c", "multi alpha=a beta=b gamma=c"},
+		{"GET", "/multi//0/b/1/c", "308 /multi/0/b/1/c"},
 		{"GET", "/z/abc", "foo abc"},
 	}
 	testRequests(t, b.Build(), testCases)

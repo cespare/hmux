@@ -130,7 +130,7 @@ One change we could consider is adding a helper for fetching a single param:
 
     name := hmux.Get(r, "name")
 
-That doesn't seem like a very good idea, though; the savings are small at it
+That doesn't seem like a very good idea, though; the savings are small and it
 encourages people not to reuse the params pulled out of the context (which
 implies allocation?).
 

@@ -1,6 +1,6 @@
 # hmux
 
-TODO
+**THIS IS A WORK IN PROGRESS. IT IS YET READY FOR USE.**
 
 ## Decisions
 

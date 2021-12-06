@@ -1,6 +1,6 @@
 # hmux
 
-**THIS IS A WORK IN PROGRESS. IT IS YET READY FOR USE.**
+**THIS IS A WORK IN PROGRESS. IT IS NOT YET READY FOR USE.**
 
 ## Decisions
 
@@ -34,11 +34,13 @@
     * Nested muxes
     * File serving
     * CORS OPTIONS
+    * Hooking up a reverse proxy
   - Exact precedence rules
   - Valid patterns (and panics)
   - All patterns start with /
   - Redirects
 * Flesh out README with links and short example
+* Host in pattern?
 
 ## Open questions
 
@@ -119,6 +121,9 @@ Should we have a helper just for that?
 
 I'm leaning toward no. Projects with lots of these can make a small helper. For
 most of the projects I've converted, it was used only once, for favicon.ico.
+
+OTOH, a problem with using builder.Get is that it doesn't handle HEAD requests.
+A ServeFile helper could register for both GET and HEAD.
 
 ### Param extraction
 

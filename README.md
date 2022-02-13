@@ -41,6 +41,10 @@
   - Redirects
 * Flesh out README with links and short example
 * Host in pattern?
+* Add some benchmarks
+  - Routing
+  - Param extraction
+  - Reduce allocs
 
 ## Open questions
 
@@ -124,23 +128,3 @@ most of the projects I've converted, it was used only once, for favicon.ico.
 
 OTOH, a problem with using builder.Get is that it doesn't handle HEAD requests.
 A ServeFile helper could register for both GET and HEAD.
-
-### Param extraction
-
-Extracting a single param is a little verbose:
-
-    name := hmux.RequestParams(r.Context()).Get("name")
-
-One change we could consider is adding a helper for fetching a single param:
-
-    name := hmux.Get(r, "name")
-
-That doesn't seem like a very good idea, though; the savings are small and it
-encourages people not to reuse the params pulled out of the context (which
-implies allocation?).
-
-A smaller change we could make would be for `RequestParams` to take an
-`*http.Request` rather than a `context.Context`. `RequestParams` shouldn't need
-access to the whole request state, but on the other hand virtually every caller
-will do `hmux.RequestParams(r.Context())` so maybe it's an improvement just to
-let them write `hmux.RequestParams(r)`.

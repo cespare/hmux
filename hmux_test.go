@@ -448,7 +448,7 @@ func testRequests(t *testing.T, mux *Mux, tests []reqTest) {
 
 func testHandler(format string, params ...string) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		p := RequestParams(r.Context())
+		p := RequestParams(r)
 		args := make([]interface{}, len(params))
 		for i, pn := range params {
 			if pn, ok := trimSuffix(pn, ":int32"); ok {

@@ -233,12 +233,11 @@ func (m *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if mr.p != nil {
-		ctx := r.Context()
-		if p0 := RequestParams(ctx); p0 != nil {
+		if p0 := RequestParams(r); p0 != nil {
 			p0.merge(mr.p)
 			mr.p = p0
 		}
-		r = r.WithContext(context.WithValue(ctx, paramKey, mr.p))
+		r = r.WithContext(context.WithValue(r.Context(), paramKey, mr.p))
 	}
 	mr.h.ServeHTTP(w, r)
 }
@@ -783,10 +782,9 @@ func (p *Params) Wildcard() string {
 }
 
 // RequestParams retrieves the Params previously registered via matching a Mux
-// rule. It returns nil if there are no params in the rule or if ctx does not
-// come from an http.Request handled by a Mux.
-func RequestParams(ctx context.Context) *Params {
-	p, _ := ctx.Value(paramKey).(*Params)
+// rule. It returns nil if there are no params in the rule.
+func RequestParams(r *http.Request) *Params {
+	p, _ := r.Context().Value(paramKey).(*Params)
 	return p
 }
 

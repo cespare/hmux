@@ -2,11 +2,16 @@ package hmux
 
 import (
 	"fmt"
+	"io/fs"
 	"math/rand"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
+	"testing/fstest"
 )
 
 func TestRedirects(t *testing.T) {
@@ -390,6 +395,58 @@ outer:
 	}
 }
 
+func TestServeFile(t *testing.T) {
+	td := t.TempDir()
+	for _, f := range []struct {
+		name string
+		data string
+		perm fs.FileMode
+	}{
+		{"x.txt", "hello world", 0o644},
+		{"perm.txt", "", 0o000},
+	} {
+		name := filepath.Join(td, f.name)
+		if err := os.WriteFile(name, []byte(f.data), f.perm); err != nil {
+			t.Fatalf("error writing %s: %s", name, err)
+		}
+	}
+
+	b := NewBuilder()
+	b.ServeFile("/x", filepath.Join(td, "x.txt"))
+	b.ServeFile("/perm", filepath.Join(td, "perm.txt"))
+
+	testCases := []reqTest{
+		{"GET", "/x", "hello world"},
+		{"HEAD", "/x", ""},
+		{"POST", "/x", "405 GET, HEAD"},
+		{"GET", "/perm", "403"},
+	}
+	testRequests(t, b.Build(), testCases)
+}
+
+func TestServeFS(t *testing.T) {
+	fsys := fstest.MapFS{
+		"hello.txt": &fstest.MapFile{
+			Data: []byte("hello world"),
+		},
+		"z/hello.txt": &fstest.MapFile{
+			Data: []byte("hello z"),
+		},
+		"perm.txt": &fstest.MapFile{
+			Data: []byte(""),
+		},
+	}
+	b := NewBuilder()
+	b.ServeFS("/x/y", fsys)
+
+	testCases := []reqTest{
+		{"GET", "/x/y/hello.txt", "hello world"},
+		{"HEAD", "/x/y/hello.txt", ""},
+		{"GET", "/x/y/z/hello.txt", "hello z"},
+	}
+	testRequests(t, b.Build(), testCases)
+}
+
 type reqTest struct {
 	method string
 	path   string
@@ -404,13 +461,17 @@ func testRequests(t *testing.T, mux *Mux, tests []reqTest) {
 		mux.ServeHTTP(w, r)
 
 		switch {
-		case tt.want == "404":
+		case tt.want == "404" || tt.want == "403":
+			want, err := strconv.Atoi(tt.want)
+			if err != nil {
+				panic("can't happen")
+			}
 			if w.Code == 200 {
-				t.Errorf("%s %s: got status 200 [%s] instead of 404",
-					tt.method, tt.path, w.Body)
-			} else if w.Code != 404 {
-				t.Errorf("%s %s: got status %d instead of 404",
-					tt.method, tt.path, w.Code)
+				t.Errorf("%s %s: got status 200 [%s] instead of %d",
+					tt.method, tt.path, w.Body, want)
+			} else if w.Code != want {
+				t.Errorf("%s %s: got status %d instead of %d",
+					tt.method, tt.path, w.Code, want)
 			}
 		case strings.HasPrefix(tt.want, "405 "):
 			if w.Code != 405 {

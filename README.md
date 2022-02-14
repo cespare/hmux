@@ -28,7 +28,6 @@
 
 ## TODO:
 
-* File serving? (Or not needed?)
 * Flesh out package doc
   - examples
     * Nested muxes
@@ -40,7 +39,6 @@
   - All patterns start with /
   - Redirects
 * Flesh out README with links and short example
-* Host in pattern?
 * Add some benchmarks
   - Routing
   - Param extraction
@@ -89,42 +87,3 @@ Get("/xyz/:k", func(w http.ResponseWriter, r *http.Request) {
 
 func handleXYZ(w http.ResponseWriter, r *http.Request, k string) { ... }
 ```
-
-### File serving
-
-When converting code to use hmux, the typical pattern for file serving is:
-
-    builder.Prefix("/static", http.FileServer(http.Dir(staticDir)))
-
-This is a tiny bit verbose. We could shorten it up with a dedicated helper
-
-    builder.ServeFiles("/static", http.FS(staticPath))
-
-That seems like not enough benefit to warrant the extra method, though.
-
-Even with that helper, we're still using the http.FileSystem interface which is
-somewhat vestigial after fs.FS. We could fix that at the same time by writing
-our own file server:
-
-    builder.ServeFiles("/static", os.DirFS(staticPath))
-
-This custom server could also not list directories, which is a feature of
-http.FileServer that I almost never want.
-
-### Serving an individual file
-
-Serving a single file is verbose:
-
-    builder.Get("/favicon.ico", func(w http.ResponseWriter, r *http.Request) {
-            http.ServeFile(w, r, "static/favicon.ico")
-    })
-
-Should we have a helper just for that?
-
-    builder.ServeFile("/favicon.ico", "static/favicon.ico")
-
-I'm leaning toward no. Projects with lots of these can make a small helper. For
-most of the projects I've converted, it was used only once, for favicon.ico.
-
-OTOH, a problem with using builder.Get is that it doesn't handle HEAD requests.
-A ServeFile helper could register for both GET and HEAD.

@@ -8,6 +8,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"net/http"
 	"net/url"
 	"path"
@@ -149,6 +150,39 @@ func skipPrefix(s string, skip int) string {
 		s = s[j+1:]
 	}
 	return s
+}
+
+// ServeFile registers GET and HEAD handlers for the given pattern that serve
+// the named file using http.ServeFile.
+func (b *Builder) ServeFile(pat, name string) {
+	if err := b.handleServeFile(pat, name); err != nil {
+		panic("hmux: " + err.Error())
+	}
+}
+
+func (b *Builder) handleServeFile(pat, name string) error {
+	p, err := parsePattern(pat)
+	if err != nil {
+		return err
+	}
+	var h http.HandlerFunc = func(w http.ResponseWriter, r *http.Request) {
+		http.ServeFile(w, r, name)
+	}
+	if err := b.addHandler(http.MethodGet, pat, p, h); err != nil {
+		return err
+	}
+	if err := b.addHandler(http.MethodHead, pat, p, h); err != nil {
+		return err
+	}
+	return nil
+}
+
+// ServeFS serves files from fsys at a prefix pattern.
+//
+// Like Prefix, the pattern prefix is removed from the beginining of the path
+// before lookup in fsys.
+func (b *Builder) ServeFS(pat string, fsys fs.FS) {
+	b.Prefix(pat, http.FileServer(http.FS(fsys)))
 }
 
 func (b *Builder) addHandler(method, pat string, p pattern, h http.Handler) error {

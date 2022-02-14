@@ -46,10 +46,13 @@ func TestMatchingPriorities(t *testing.T) {
 		{"GET", "/a/cats/6", testHandler("cat 6")},
 		{"GET", "/a/cats/xyz", testHandler("cat xyz")},
 		{"GET", "/a/cats/:id", testHandler("get cat %s", "id")},
+		{"GET", "/:p/cats/xyz", testHandler("%s cat xyz", "p")},
+		{"GET", "/:p/cats/:id", testHandler("%s cat id %s", "p", "id")},
 		{"GET", "/a/cats/:id:int32", testHandler("get int32 cat %d", "id:int32")},
 		{"GET", "/a/cats/:id:int64", testHandler("get int64 cat %d", "id:int64")},
 		{"GET", "/a/cats/*", testHandler("get cat wildcard %s", "*")},
 		{"GET", "/a/*", testHandler("catch-all %s", "*")},
+		{"GET", "/:p/turtles/*", testHandler("%s turtles %s", "p", "*")},
 	}
 
 	testCases := []reqTest{
@@ -67,6 +70,8 @@ func TestMatchingPriorities(t *testing.T) {
 		{"PUT", "/a/cats/xyz", "put cat xyz"},
 		{"GET", "/a/cats/6", "cat 6"},
 		{"GET", "/a/cats/xyz", "cat xyz"},
+		{"GET", "/b/cats/6", "b cat id 6"},
+		{"GET", "/b/cats/xyz", "b cat xyz"},
 		{"GET", "/a/cats/123", "get int32 cat 123"},
 		{"GET", "/a/cats/123123123123", "get int64 cat 123123123123"},
 		{"GET", "/a/cats/123123123123123123123123", "get cat 123123123123123123123123"},
@@ -74,6 +79,7 @@ func TestMatchingPriorities(t *testing.T) {
 		{"GET", "/a/cats/12/3", "get cat wildcard /12/3"},
 		{"GET", "/a/cats/a/b/c", "get cat wildcard /a/b/c"},
 		{"GET", "/a/dogs/3", "catch-all /dogs/3"},
+		{"GET", "/a/turtles/a/b/c", "a turtles /a/b/c"},
 	}
 
 	for i := 0; i < 200; i++ {

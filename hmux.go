@@ -1,7 +1,73 @@
 // Package hmux provides an HTTP request multiplexer which matches requests to
 // handlers using method- and path-based rules.
 //
-// TODO: more docs
+// Using hmux involves two phases: construction, using a Builder, and request
+// serving, using Mux.
+//
+//   b := hmux.NewBuilder()
+//   b.Get("/", handleIndex)
+//   ...
+//   mux := b.Build()
+//   http.ListenAndServe(addr, mux)
+//
+// Patterns
+//
+// Builder rules are registered using pattern strings to match URL paths.
+//
+// A pattern begins with a slash ("/") and contains zero or more segments
+// separated by slashes.
+//
+// In the simplest case, the pattern matches a single route because each segment
+// is a literal string:
+//
+//   b.Get("/home/about", hmux.ServeFile("about.html"))
+//
+// A pattern segment may instead contain a parameter, which begins with a colon:
+//
+//   b.Get("/teams/:team/users/:username", serveUser)
+//
+// This pattern matches many different URL paths:
+//
+//   /teams/llamas/users/bob
+//   /teams/45/users/92
+//   ...
+//
+// A pattern may end with a slash; it only matches URL paths that also end with
+// a slash.
+//
+// A "wildcard" pattern has a segment of "*" at the end (after the final slash):
+//
+//   b.Get("/lookup/:db/*", handleLookup)
+//
+// This matches any path beginning with the preceding segments:
+//
+//   /lookup/miami/a/b/c
+//   /lookup/frankfurt/568739
+//   /lookup/tokyo/
+//   /lookup/
+//   (but not /lookup)
+//
+// Wildcard patterns are especially useful in conjunction with Builder.Prefix
+// and Builder.ServeFS, which always treat their patterns as wildcard patterns
+// even if they don't have the ending *.
+//
+// Routing
+//
+// A Mux routes requests to the handler registered by the most specific rule
+// that matches the request's path and method. When comparing two patterns,
+// the most specific one is the pattern with the most segments. FIXME
+//
+// Params
+//
+// TODO
+//
+// Routing responses (incl 405)
+// Redirects
+// Param extraction
+// Exact pattern syntax
+//   all patterns start with /
+// Exact precedence rules
+// Escaping special characters
 package hmux
 
 import (
@@ -21,6 +87,12 @@ import (
 // and related helper methods (Get, Post, and so on). After all the rules have
 // been added, Build creates the Mux which uses those rules to route incoming
 // requests.
+//
+// A Builder is intended to be used at program initialization and, as such, its
+// methods panic on incorrect use. In particular, any method that registers a
+// pattern (Get, Handle, ServeFile, and so on) panics if the pattern is
+// syntactically invalid or if the rule conflicts with any previously registered
+// rule.
 type Builder struct {
 	matchers []*matcher
 }
@@ -31,38 +103,32 @@ func NewBuilder() *Builder {
 }
 
 // Get registers a handler for GET requests using the given path pattern.
-// Get panics if this rule is the same as a previously registered rule.
 func (b *Builder) Get(pat string, h http.HandlerFunc) {
 	b.Handle(http.MethodGet, pat, h)
 }
 
 // Post registers a handler for POST requests using the given path pattern.
-// Post panics if this rule is the same as a previously registered rule.
 func (b *Builder) Post(pat string, h http.HandlerFunc) {
 	b.Handle(http.MethodPost, pat, h)
 }
 
 // Put registers a handler for PUT requests using the given path pattern.
-// Put panics if this rule is the same as a previously registered rule.
 func (b *Builder) Put(pat string, h http.HandlerFunc) {
 	b.Handle(http.MethodPut, pat, h)
 }
 
 // Delete registers a handler for DELETE requests using the given path pattern.
-// Delete panics if this rule is the same as a previously registered rule.
 func (b *Builder) Delete(pat string, h http.HandlerFunc) {
 	b.Handle(http.MethodDelete, pat, h)
 }
 
 // Head registers a handler for HEAD requests using the given path pattern.
-// Head panics if this rule is the same as a previously registered rule.
 func (b *Builder) Head(pat string, h http.HandlerFunc) {
 	b.Handle(http.MethodHead, pat, h)
 }
 
 // Handle registers a handler for the given HTTP method and path pattern.
 // If method is the empty string, the handler is registered for all HTTP methods.
-// Handle panics if this rule is the same as a previously registered rule.
 func (b *Builder) Handle(method, pat string, h http.Handler) {
 	if err := b.handle(method, pat, h); err != nil {
 		panic("hmux: " + err.Error())
@@ -220,12 +286,12 @@ func (b *Builder) Build() *Mux {
 }
 
 // Mux is an HTTP request multiplexer. It matches the URL path and HTTP method
-// of each incoming request to a list of registered rules and calls the handler
-// that most closely matches the request. It supplies path-based parameters
-// named by the matched rule via the HTTP request context.
+// of each incoming request to a list of rules and calls the handler that most
+// closely matches the request. It supplies path-based parameters named by the
+// matched rule via the HTTP request context.
 //
-// A Mux is constructed by adding rules to a Builder. The Mux's rules are static
-// once it is built.
+// A Mux is constructed by adding rules to a Builder. The Mux's rules do not
+// change after it is built.
 type Mux struct {
 	matchers []*matcher
 }

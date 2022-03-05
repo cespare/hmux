@@ -54,19 +54,57 @@
 // Routing
 //
 // A Mux routes requests to the handler registered by the most specific rule
-// that matches the request's path and method. When comparing two patterns,
-// the most specific one is the pattern with the most segments. FIXME
+// that matches the request's path and method. When comparing two rules,
+// the most specific one is the rule with the most specific pattern; if both
+// rules have patterns that are equally specific, then the most specific rule is
+// the one that matches specific methods rather than all methods.
 //
-// Params
+// Pattern specificity is defined as a segment-by-segment comparison,
+// starting from the beginning. The types of segments, arranged from most to
+// least specific, are:
+//
+//   * literal ("/a")
+//   * int32 parameter ("/:p:int32")
+//   * int64 parameter ("/:p:int64")
+//   * string parameter ("/:p")
+//
+// For two patterns having the same segment specificity, a pattern ending with
+// slash is more specific than a pattern ending with a wildcard.
+//
+// As an example, suppose there are five rules:
+//
+//   b.Get("/x/y", handlerA)
+//   b.Get("/x/:p:int32", handlerB)
+//   b.Get("/x/:p", handlerC)
+//   b.Get("/:p/y", handlerD)
+//   b.Handle("", "/x/y", handlerE)
+//
+// Requests are routed as follows:
+//
+//   GET /x/y   handlerA
+//   GET /x/3   handlerB
+//   GET /x/z   handlerC
+//   GET /y/z   handlerD
+//   POST /x/y  handlerE
+//
+// If a request matches the patterns of one or more rules but does not match the
+// methods of any of those rules, the Mux writes an HTTP 405 ("Method Not
+// Allowed") response with an Allow header that lists all of the matching
+// methods.
+//
+// Before routing, if the request path contains any segment that is "" (that is,
+// a double slash), ".", or "..", the Mux writes an HTTP 308 redirect to an
+// equivalent cleaned path. For example, all of these are redirected to /x/y:
+//
+//   /x//y
+//   /x/./y
+//   /x/y/z/..
+//
+// Parameters
 //
 // TODO
 //
-// Routing responses (incl 405)
-// Redirects
 // Param extraction
-// Exact pattern syntax
-//   all patterns start with /
-// Exact precedence rules
 // Escaping special characters
 package hmux
 

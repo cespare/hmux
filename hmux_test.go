@@ -79,7 +79,8 @@ func TestMatchingPriorities(t *testing.T) {
 		{"GET", "/a/cats/12/3", "get cat wildcard /12/3"},
 		{"GET", "/a/cats/a/b/c", "get cat wildcard /a/b/c"},
 		{"GET", "/a/dogs/3", "catch-all /dogs/3"},
-		{"GET", "/a/turtles/a/b/c", "a turtles /a/b/c"},
+		{"GET", "/a/turtles/a/b/c", "catch-all /turtles/a/b/c"},
+		{"GET", "/b/turtles/a/b/c", "b turtles /a/b/c"},
 	}
 
 	for i := 0; i < 200; i++ {
@@ -394,9 +395,11 @@ outer:
 		err := b.handle(rule.method, rule.pat, h)
 		if err == nil {
 			t.Errorf(`handle(%q, %q, h) (last): got nil error; want conflict`, rule.method, rule.pat)
+			continue
 		}
 		if !strings.Contains(err.Error(), "conflicts with previously registered pattern") {
 			t.Errorf(`handle(%q, %q, h) (last): got %s; want conflict error`, rule.method, rule.pat, err)
+			continue
 		}
 	}
 }

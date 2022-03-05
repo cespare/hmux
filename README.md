@@ -28,7 +28,6 @@
 
 ## TODO:
 
-* Change prioritization
 * Flesh out package doc
   - examples
     * Nested muxes

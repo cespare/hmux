@@ -169,8 +169,7 @@ func (b *Builder) Prefix(pat string, h http.Handler) {
 	if err != nil {
 		panic("hmux: " + err.Error())
 	}
-	p.trailingSlash = false
-	p.wildcard = true
+	p.end = endWildcard
 	ph := prefixHandler{
 		h:    h,
 		skip: len(p.segs),
@@ -253,9 +252,9 @@ func (b *Builder) ServeFS(pat string, fsys fs.FS) {
 
 func (b *Builder) addHandler(method, pat string, p pattern, h http.Handler) error {
 	i := sort.Search(len(b.matchers), func(i int) bool {
-		return !p.less(b.matchers[i].pat)
+		return p.compare(b.matchers[i].pat) >= 0
 	})
-	if i < len(b.matchers) && !b.matchers[i].pat.less(p) {
+	if i < len(b.matchers) && b.matchers[i].pat.compare(p) == 0 {
 		// segs has the same priority as b.matchers[i].segs
 		if !b.matchers[i].merge(method, h) {
 			return fmt.Errorf("%s %q conflicts with previously registered pattern", method, pat)
@@ -461,10 +460,17 @@ func parseSegment(s string) (segment, error) {
 
 type pattern struct {
 	segs []segment
-	// trailingSlash and wildcard are mutually exclusive.
-	trailingSlash bool
-	wildcard      bool
+	end  patternEnding
 }
+
+type patternEnding int8
+
+const (
+	// In precedence order.
+	endNone patternEnding = iota
+	endWildcard
+	endSlash
+)
 
 var (
 	errPatternWithoutSlash = errors.New("pattern does not begin with a /")
@@ -479,8 +485,13 @@ func parsePattern(pat string) (pattern, error) {
 	if !strings.HasPrefix(pat, "/") {
 		return p, errPatternWithoutSlash
 	}
-	pat, p.wildcard = trimSuffix(pat, "/*")
-	pat, p.trailingSlash = trimSuffix(pat, "/")
+	var ok bool
+	if pat, ok = trimSuffix(pat, "/*"); ok {
+		p.end = endWildcard
+	}
+	if pat, ok = trimSuffix(pat, "/"); ok {
+		p.end = endSlash
+	}
 	pat = strings.TrimPrefix(pat, "/")
 
 	// Now:
@@ -511,44 +522,39 @@ func parsePattern(pat string) (pattern, error) {
 	return p, nil
 }
 
-func (p pattern) less(p1 pattern) bool {
-	if len(p.segs) != len(p1.segs) {
-		return len(p.segs) < len(p1.segs)
+func (p pattern) compare(p1 pattern) int {
+	n := len(p.segs)
+	if n > len(p1.segs) {
+		n = len(p1.segs)
 	}
-	var end0, end1 int
-	if p.wildcard {
-		end0 = 1
-	}
-	if p.trailingSlash {
-		end0 = 2
-	}
-	if p1.wildcard {
-		end1 = 1
-	}
-	if p1.trailingSlash {
-		end1 = 2
-	}
-	if end0 != end1 {
-		// trailing slash > wildcard
-		return end0 < end1
-	}
-	for i, seg0 := range p.segs {
+	for i := 0; i < n; i++ {
+		seg0 := p.segs[i]
 		seg1 := p1.segs[i]
 		if seg0.isParam != seg1.isParam {
 			// literal > param
-			return seg0.isParam
+			if seg0.isParam {
+				return -1
+			} else {
+				return 1
+			}
 		}
 		if seg0.isParam {
 			if seg0.ptyp != seg1.ptyp {
-				return seg0.ptyp < seg1.ptyp
+				return int(seg0.ptyp - seg1.ptyp)
 			}
 		} else {
 			if seg0.s != seg1.s {
-				return seg0.s < seg1.s
+				return strings.Compare(seg0.s, seg1.s)
 			}
 		}
 	}
-	return false
+	if len(p.segs) > n {
+		return 1
+	}
+	if len(p1.segs) > n {
+		return -1
+	}
+	return int(p.end - p1.end)
 }
 
 type matcher struct {
@@ -591,13 +597,13 @@ type matchResult struct {
 var noMatch matchResult
 
 func (m *matcher) match(method string, parts []string, opts matchOpts) matchResult {
-	if opts&optTrailingSlash != 0 && !(m.pat.trailingSlash || m.pat.wildcard) {
+	if opts&optTrailingSlash != 0 && m.pat.end == endNone {
 		return noMatch
 	}
-	if opts&optTrailingSlash == 0 && m.pat.trailingSlash {
+	if opts&optTrailingSlash == 0 && m.pat.end == endSlash {
 		return noMatch
 	}
-	if m.pat.wildcard {
+	if m.pat.end == endWildcard {
 		if len(parts) < len(m.pat.segs) {
 			return noMatch
 		}
@@ -627,7 +633,7 @@ func (m *matcher) match(method string, parts []string, opts matchOpts) matchResu
 			}
 		}
 	}
-	if m.pat.wildcard {
+	if m.pat.end == endWildcard {
 		// The pattern "/x/*" should not match requests for "/x".
 		// (But it should match "/x/".)
 		if len(parts) == len(m.pat.segs) && opts&optTrailingSlash == 0 {

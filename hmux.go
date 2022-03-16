@@ -56,6 +56,12 @@
 // As a special case, the pattern "*" matches (only) the request URI "*". This
 // is typically used with OPTIONS requests.
 //
+// A Builder does not accept two rules with overlapping methods and the same
+// pattern.
+//
+//   b.Handle("", "/x/:one", h1)
+//   b.Get("/x/:two", h2) // Panic! Pattern is already registered for all methods.
+//
 // Routing
 //
 // A Mux routes requests to the handler registered by the most specific rule
@@ -97,6 +103,9 @@
 // Allowed") response with an Allow header that lists all of the matching
 // methods.
 //
+// If there is no matching rule pattern at all, the Mux writes an HTTP 404
+// ("Not Found") response.
+//
 // Before routing, if the request path contains any segment that is "" (that is,
 // a double slash), ".", or "..", the Mux writes an HTTP 308 redirect to an
 // equivalent cleaned path. For example, all of these are redirected to /x/y:
@@ -107,9 +116,35 @@
 //
 // Parameters
 //
+// Parameter segments may specify a type after a second colon:
+//
+//   b.Post("/employees/:username:string", handleUpdateEmployee)
+//
+// A string parameter matches any URL path segment, and it is also the default
+// type if no parameter type is given.
+//
+// The other parameter types are int32 and int64. A parameter segment with an
+// integer type matches the corresponding URL path segment if that segment can
+// be parsed as a decimal integer of that type.
+//
+//   b.Get("/inventory/:itemid:int64/price", handlePrice)
+//
+// Parameters are passed through to HTTP handlers using http.Request.Context.
+// Inside an HTTP handler called by a Mux, parameters are available via
+// RequestParams.
+//
+//   b.Get("/:region/:shard:int64/*", handleLookup)
+//   ...
+//   func handleLookup(w http.ResponseWriter, r *http.Request) {
+//   	p := hmux.RequestParams(r)
+//   	// Suppose we get a URL path of /west/39/alfa/bravo
+//   	p.Get("region")  // "west"
+//   	p.Int64("shard") // 39
+//   	p.Wildcard()     // "/alfa/bravo"
+//   }
+//
 // TODO
 //
-// Param extraction
 // Escaping special characters
 package hmux
 

@@ -32,11 +32,17 @@ func TestRedirects(t *testing.T) {
 func TestSpecialPatterns(t *testing.T) {
 	b := NewBuilder()
 	b.Handle("", "*", testHandler("star"))
+	b.Get("", testHandler("empty"))
 	testCases := []reqTest{
 		{"OPTIONS", "*", "star"},
 		{"GET", "*", "star"},
-		{"OPTIONS", "/", "404"},
-		{"GET", "/*", "404"},
+		{"OPTIONS", "/", "405 GET"},
+		{"OPTIONS", "/*", "405 GET"},
+		{"GET", "/", "empty"},
+		{"GET", "/a/b", "empty"},
+	}
+	testRequests(t, b.Build(), testCases)
+}
 	}
 	testRequests(t, b.Build(), testCases)
 }
@@ -65,6 +71,7 @@ func TestMatchingPriorities(t *testing.T) {
 		{"GET", "/a/cats/*", testHandler("get cat wildcard %s", "*")},
 		{"GET", "/a/*", testHandler("catch-all %s", "*")},
 		{"GET", "/:p/turtles/*", testHandler("%s turtles %s", "p", "*")},
+		{"GET", "", testHandler("empty")},
 	}
 
 	testCases := []reqTest{
@@ -74,11 +81,11 @@ func TestMatchingPriorities(t *testing.T) {
 		{"PUT", "/x", "405 GET, POST"},
 		{"GET", "/x/y", "/x/y"},
 		{"GET", "/x/z", "/:p/z"},
-		{"GET", "/y", "404"},
+		{"GET", "/y", "empty"},
 		{"GET", "/z/y", "/z/y"},
 		{"POST", "/x", "post /x"},
 		{"POST", "/x/y", "405 GET"},
-		{"GET", "/a", "404"},
+		{"GET", "/a", "empty"},
 		{"PUT", "/a/cats/xyz", "put cat xyz"},
 		{"GET", "/a/cats/6", "cat 6"},
 		{"GET", "/a/cats/xyz", "cat xyz"},

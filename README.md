@@ -28,8 +28,6 @@
 
 ## TODO:
 
-* Pattern special case: `""` to match any URI. (Useful for CONNECT requests, for
-  example, which give an authority as the URI.)
 * Special redirect/cleaning behavior for CONNECT requests?
 * Flesh out package doc
   - examples
@@ -37,6 +35,7 @@
     * File serving
     * CORS OPTIONS
     * Hooking up a reverse proxy
+    * Overriding the default 404 response with a "" pattern fallback
   - Exact precedence rules
   - Valid patterns (and panics)
   - All patterns start with /

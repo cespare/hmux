@@ -53,8 +53,12 @@
 // and Builder.ServeFS, which always treat their inputs as wildcard patterns
 // even if they don't have the ending *.
 //
-// As a special case, the pattern "*" matches (only) the request URI "*". This
-// is typically used with OPTIONS requests.
+// There are two special patterns which don't begin with a slash: "*" and "".
+//
+// The pattern "*" matches (only) the request URI "*". This is typically used
+// with OPTIONS requests.
+//
+// The empty pattern ("") matches any request URI.
 //
 // A Builder does not accept two rules with overlapping methods and the same
 // pattern.
@@ -547,11 +551,11 @@ type patternOpt int
 
 const (
 	// In precedence order.
-	patOther patternOpt = iota // none of the below
-	// patEmpty                           // ""
-	patStar          // "*"
-	patWildcard      // ends with "/*"
-	patTrailingSlash // ends with "/"
+	patOther         patternOpt = iota // none of the below
+	patEmpty                           // ""
+	patStar                            // "*"
+	patWildcard                        // ends with "/*"
+	patTrailingSlash                   // ends with "/"
 )
 
 type pattern struct {
@@ -566,6 +570,10 @@ var (
 
 func parsePattern(pat string) (pattern, error) {
 	var p pattern
+	if pat == "" {
+		p.opt = patEmpty
+		return p, nil
+	}
 	if pat == "*" {
 		p.opt = patStar
 		return p, nil
@@ -694,6 +702,8 @@ func (m *matcher) match(method string, parts []string, opts matchOpts) matchResu
 		if opts&optTrailingSlash != 0 {
 			return noMatch
 		}
+	case patEmpty:
+		return m.matchMethod(method, nil)
 	case patStar:
 		if opts&optStar != 0 {
 			return m.matchMethod(method, nil)

@@ -28,7 +28,6 @@
 
 ## TODO:
 
-* Special redirect/cleaning behavior for CONNECT requests?
 * Flesh out package doc
   - examples
     * Nested muxes
@@ -36,10 +35,6 @@
     * CORS OPTIONS
     * Hooking up a reverse proxy
     * Overriding the default 404 response with a "" pattern fallback
-  - Exact precedence rules
-  - Valid patterns (and panics)
-  - All patterns start with /
-  - Redirects
 * Flesh out README with links and short example
 * Add some benchmarks
   - Routing

@@ -118,6 +118,8 @@
 //   /x/./y
 //   /x/y/z/..
 //
+// This automatic redirection does not apply to CONNECT requests.
+//
 // Parameters
 //
 // Parameter segments may specify a type after a second colon:
@@ -425,7 +427,7 @@ func (m *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func shouldRedirect(pth string) (string, bool) {
-	// Note that the net/http server will reject these (WIP WIP WIP)
+	// Note that the net/http server will reject these.
 	if pth == "" {
 		return "/", true
 	}

@@ -43,6 +43,22 @@ func TestSpecialPatterns(t *testing.T) {
 	}
 	testRequests(t, b.Build(), testCases)
 }
+
+// Test the example presented in doc comments.
+func TestDocPriorities(t *testing.T) {
+	b := NewBuilder()
+	b.Get("/x/y", testHandler("A"))
+	b.Get("/x/:p:int32", testHandler("B"))
+	b.Get("/x/:p", testHandler("C"))
+	b.Get("/:p/y", testHandler("D"))
+	b.Handle("", "/x/y", testHandler("E"))
+
+	testCases := []reqTest{
+		{"GET", "/x/y", "A"},
+		{"GET", "/x/3", "B"},
+		{"GET", "/x/z", "C"},
+		{"GET", "/y/y", "D"},
+		{"POST", "/x/y", "E"},
 	}
 	testRequests(t, b.Build(), testCases)
 }
@@ -351,7 +367,6 @@ func TestMalformedPattern(t *testing.T) {
 		pat  string
 		want interface{}
 	}{
-		{"", errPatternWithoutSlash},
 		{"/a//", errPatternSlash},
 		{"a/", errPatternWithoutSlash},
 		{"/a*/b", errSegmentStar},

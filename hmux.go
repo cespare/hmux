@@ -99,7 +99,7 @@
 //   GET /x/y   handlerA
 //   GET /x/3   handlerB
 //   GET /x/z   handlerC
-//   GET /y/z   handlerD
+//   GET /y/y   handlerD
 //   POST /x/y  handlerE
 //
 // If a request matches the patterns of one or more rules but does not match the
@@ -787,9 +787,7 @@ func (m *matcher) merge(method string, h http.Handler) bool {
 		if m.allMethods != nil {
 			return false
 		}
-		// We shouldn't get here since we only try to merge matchers of
-		// the same priority.
-		panic("shouldn't happen")
+		m.allMethods = h
 	}
 	return m.addMethodHandler(method, h)
 }

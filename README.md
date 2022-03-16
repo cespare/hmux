@@ -28,6 +28,9 @@
 
 ## TODO:
 
+* Pattern special case: `""` to match any URI. (Useful for CONNECT requests, for
+  example, which give an authority as the URI.)
+* Special redirect/cleaning behavior for CONNECT requests?
 * Flesh out package doc
   - examples
     * Nested muxes

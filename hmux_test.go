@@ -29,6 +29,18 @@ func TestRedirects(t *testing.T) {
 	testRequests(t, b.Build(), testCases)
 }
 
+func TestSpecialPatterns(t *testing.T) {
+	b := NewBuilder()
+	b.Handle("", "*", testHandler("star"))
+	testCases := []reqTest{
+		{"OPTIONS", "*", "star"},
+		{"GET", "*", "star"},
+		{"OPTIONS", "/", "404"},
+		{"GET", "/*", "404"},
+	}
+	testRequests(t, b.Build(), testCases)
+}
+
 func TestMatchingPriorities(t *testing.T) {
 	type testRule struct {
 		method string
@@ -267,7 +279,8 @@ func TestParams(t *testing.T) {
 	b.Get(
 		"/:int32:int32",
 		testHandler(
-			"int32 int=%d int32=%d int64=%d",
+			"int32 string=%s int=%d int32=%d int64=%d",
+			"int32",
 			"int32:int",
 			"int32:int32",
 			"int32:int64",
@@ -301,14 +314,14 @@ func TestParams(t *testing.T) {
 		{"GET", "/abc", "string abc"},
 		{"GET", "/abc123", "string abc123"},
 		{"GET", "/123abc", "string 123abc"},
-		{"GET", "/123", "int32 int=123 int32=123 int64=123"},
-		{"GET", "/0", "int32 int=0 int32=0 int64=0"},
-		{"GET", "/-1", "int32 int=-1 int32=-1 int64=-1"},
-		{"GET", "/-2147483648", "int32 int=-2147483648 int32=-2147483648 int64=-2147483648"},
+		{"GET", "/123", "int32 string=123 int=123 int32=123 int64=123"},
+		{"GET", "/0", "int32 string=0 int=0 int32=0 int64=0"},
+		{"GET", "/-1", "int32 string=-1 int=-1 int32=-1 int64=-1"},
+		{"GET", "/-2147483648", "int32 string=-2147483648 int=-2147483648 int32=-2147483648 int64=-2147483648"},
 		{"GET", "/-2147483649", "int64 -2147483649"},
 		{"GET", "/-9223372036854775808", "int64 -9223372036854775808"},
 		{"GET", "/-9223372036854775809", "string -9223372036854775809"},
-		{"GET", "/2147483647", "int32 int=2147483647 int32=2147483647 int64=2147483647"},
+		{"GET", "/2147483647", "int32 string=2147483647 int=2147483647 int32=2147483647 int64=2147483647"},
 		{"GET", "/2147483648", "int64 2147483648"},
 		{"GET", "/9223372036854775807", "int64 9223372036854775807"},
 		{"GET", "/9223372036854775808", "string 9223372036854775808"},

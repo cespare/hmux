@@ -12,7 +12,8 @@
 //
 // Patterns
 //
-// Builder rules are registered using pattern strings to match URL paths.
+// Builder rules are registered using pattern strings to match URL paths in the
+// request URI.
 //
 // A pattern begins with a slash ("/") and contains zero or more segments
 // separated by slashes.
@@ -35,11 +36,12 @@
 // A pattern may end with a slash; it only matches URL paths that also end with
 // a slash.
 //
-// A "wildcard" pattern has a segment of "*" at the end (after the final slash):
+// A "wildcard" pattern has a segment containing only * at the end (after the
+// final slash):
 //
 //   b.Get("/lookup/:db/*", handleLookup)
 //
-// This matches any path beginning with the preceding segments:
+// This matches any path beginning with the same prefix of segments:
 //
 //   /lookup/miami/a/b/c
 //   /lookup/frankfurt/568739
@@ -48,8 +50,11 @@
 //   (but not /lookup)
 //
 // Wildcard patterns are especially useful in conjunction with Builder.Prefix
-// and Builder.ServeFS, which always treat their patterns as wildcard patterns
+// and Builder.ServeFS, which always treat their inputs as wildcard patterns
 // even if they don't have the ending *.
+//
+// As a special case, the pattern "*" matches (only) the request URI "*". This
+// is typically used with OPTIONS requests.
 //
 // Routing
 //
@@ -207,7 +212,7 @@ func (b *Builder) Prefix(pat string, h http.Handler) {
 	if err != nil {
 		panic("hmux: " + err.Error())
 	}
-	p.end = endWildcard
+	p.opt = patWildcard
 	ph := prefixHandler{
 		h:    h,
 		skip: len(p.segs),
@@ -289,6 +294,7 @@ func (b *Builder) ServeFS(pat string, fsys fs.FS) {
 }
 
 func (b *Builder) addHandler(method, pat string, p pattern, h http.Handler) error {
+	// Insert in descending precedence order.
 	i := sort.Search(len(b.matchers), func(i int) bool {
 		return p.compare(b.matchers[i].pat) >= 0
 	})
@@ -380,6 +386,7 @@ func (m *Mux) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 }
 
 func shouldRedirect(pth string) (string, bool) {
+	// Note that the net/http server will reject these (WIP WIP WIP)
 	if pth == "" {
 		return "/", true
 	}
@@ -415,13 +422,17 @@ func shouldRedirect(pth string) (string, bool) {
 
 func (m *Mux) handler(method, pth string, opts matchOpts) matchResult {
 	var parts []string
-	pth, trailingSlash := trimSuffix(pth, "/")
-	if trailingSlash {
-		opts |= optTrailingSlash
-	}
-	pth = strings.TrimPrefix(pth, "/")
-	if pth != "" {
-		parts = strings.Split(pth, "/")
+	if pth == "*" {
+		opts |= optStar
+	} else {
+		pth, trailingSlash := trimSuffix(pth, "/")
+		if trailingSlash {
+			opts |= optTrailingSlash
+		}
+		pth = strings.TrimPrefix(pth, "/")
+		if pth != "" {
+			parts = strings.Split(pth, "/")
+		}
 	}
 	if opts&optReencode != 0 {
 		for i, part := range parts {
@@ -496,19 +507,22 @@ func parseSegment(s string) (segment, error) {
 	return seg, nil
 }
 
-type pattern struct {
-	segs []segment
-	end  patternEnding
-}
-
-type patternEnding int8
+// A patternOpt indicates one of several mutually exclusive types of patterns.
+type patternOpt int
 
 const (
 	// In precedence order.
-	endNone patternEnding = iota
-	endWildcard
-	endSlash
+	patOther patternOpt = iota // none of the below
+	// patEmpty                           // ""
+	patStar          // "*"
+	patWildcard      // ends with "/*"
+	patTrailingSlash // ends with "/"
 )
+
+type pattern struct {
+	segs []segment
+	opt  patternOpt
+}
 
 var (
 	errPatternWithoutSlash = errors.New("pattern does not begin with a /")
@@ -517,6 +531,10 @@ var (
 
 func parsePattern(pat string) (pattern, error) {
 	var p pattern
+	if pat == "*" {
+		p.opt = patStar
+		return p, nil
+	}
 	if strings.Contains(pat, "//") {
 		return p, errPatternSlash
 	}
@@ -525,10 +543,10 @@ func parsePattern(pat string) (pattern, error) {
 	}
 	var ok bool
 	if pat, ok = trimSuffix(pat, "/*"); ok {
-		p.end = endWildcard
+		p.opt = patWildcard
 	}
 	if pat, ok = trimSuffix(pat, "/"); ok {
-		p.end = endSlash
+		p.opt = patTrailingSlash
 	}
 	pat = strings.TrimPrefix(pat, "/")
 
@@ -592,7 +610,7 @@ func (p pattern) compare(p1 pattern) int {
 	if len(p1.segs) > n {
 		return -1
 	}
-	return int(p.end - p1.end)
+	return int(p.opt - p1.opt)
 }
 
 type matcher struct {
@@ -616,6 +634,7 @@ type matchOpts uint8
 
 const (
 	optTrailingSlash matchOpts = 1 << iota
+	optStar
 	optReencode
 )
 
@@ -635,13 +654,22 @@ type matchResult struct {
 var noMatch matchResult
 
 func (m *matcher) match(method string, parts []string, opts matchOpts) matchResult {
-	if opts&optTrailingSlash != 0 && m.pat.end == endNone {
+	switch m.pat.opt {
+	case patOther:
+		if opts&optTrailingSlash != 0 {
+			return noMatch
+		}
+	case patStar:
+		if opts&optStar != 0 {
+			return m.matchMethod(method, nil)
+		}
 		return noMatch
+	case patTrailingSlash:
+		if opts&optTrailingSlash == 0 {
+			return noMatch
+		}
 	}
-	if opts&optTrailingSlash == 0 && m.pat.end == endSlash {
-		return noMatch
-	}
-	if m.pat.end == endWildcard {
+	if m.pat.opt == patWildcard {
 		if len(parts) < len(m.pat.segs) {
 			return noMatch
 		}
@@ -671,7 +699,7 @@ func (m *matcher) match(method string, parts []string, opts matchOpts) matchResu
 			}
 		}
 	}
-	if m.pat.end == endWildcard {
+	if m.pat.opt == patWildcard {
 		// The pattern "/x/*" should not match requests for "/x".
 		// (But it should match "/x/".)
 		if len(parts) == len(m.pat.segs) && opts&optTrailingSlash == 0 {
@@ -686,6 +714,10 @@ func (m *matcher) match(method string, parts []string, opts matchOpts) matchResu
 		}
 		p.hasWildcard = true
 	}
+	return m.matchMethod(method, p)
+}
+
+func (m *matcher) matchMethod(method string, p *Params) matchResult {
 	if h, ok := m.byMethod[method]; ok {
 		return matchResult{h: h, p: p}
 	}

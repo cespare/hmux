@@ -12,7 +12,7 @@
 //
 // Patterns
 //
-// Builder rules match methods and paths in request URIs. The path is matched
+// Builder rules match methods and paths in request URLs. The path is matched
 // using a pattern string.
 //
 // A pattern begins with a slash ("/") and contains zero or more segments
@@ -55,10 +55,10 @@
 //
 // There are two special patterns which don't begin with a slash: "*" and "".
 //
-// The pattern "*" matches (only) the request URI "*". This is typically used
+// The pattern "*" matches (only) the request URL "*". This is typically used
 // with OPTIONS requests.
 //
-// The empty pattern ("") matches any request URI.
+// The empty pattern ("") matches any request URL.
 //
 // A Builder does not accept two rules with overlapping methods and the same
 // pattern.
@@ -136,22 +136,21 @@
 //
 // Parameters
 //
-// Parameter segments may specify a type after a second colon:
+// Pattern segments may specify a type after a second colon:
 //
 //   b.Post("/employees/:username:string", handleUpdateEmployee)
 //
 // A string parameter matches any URL path segment, and it is also the default
 // type if no parameter type is given.
 //
-// The other parameter types are int32 and int64. A parameter segment with an
-// integer type matches the corresponding URL path segment if that segment can
-// be parsed as a decimal integer of that type.
+// The other parameter types are int32 and int64. A pattern segment with an
+// integer type matches the corresponding request URL path segment if that
+// segment can be parsed as a decimal integer of that type.
 //
 //   b.Get("/inventory/:itemid:int64/price", handlePrice)
 //
-// Parameters are passed through to HTTP handlers using http.Request.Context.
-// Inside an HTTP handler called by a Mux, parameters are available via
-// RequestParams.
+// Parameters are passed to HTTP handlers using http.Request.Context. Inside an
+// HTTP handler called by a Mux, parameters are available via RequestParams.
 //
 //   b.Get("/:region/:shard:int64/*", handleLookup)
 //   ...
@@ -392,9 +391,6 @@ func (b *Builder) Build() *Mux {
 // of each incoming request to a list of rules and calls the handler that most
 // closely matches the request. It supplies path-based parameters named by the
 // matched rule via the HTTP request context.
-//
-// A Mux is constructed by adding rules to a Builder. The Mux's rules do not
-// change after it is built.
 type Mux struct {
 	matchers []*matcher
 }

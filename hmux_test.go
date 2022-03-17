@@ -401,6 +401,34 @@ func TestMalformedPattern(t *testing.T) {
 	}
 }
 
+func TestPrefixErrors(t *testing.T) {
+	for _, tt := range []struct {
+		pat  string
+		want string
+	}{
+		{"bad", "pattern does not begin"},
+		{"", "empty"},
+		{"*", "*"},
+	} {
+		var got string
+		func() {
+			defer func() {
+				if x := recover(); x != nil {
+					got, _ = x.(string)
+				}
+			}()
+			NewBuilder().Prefix(tt.pat, testHandler(""))
+		}()
+		if got == "" {
+			t.Errorf("Prefix(%q, *): got nil error; want %q", tt.pat, tt.want)
+			continue
+		}
+		if !strings.Contains(got, tt.want) {
+			t.Errorf("Prefix(%q, *):\ngot %q\nwant substring %q", tt.pat, got, tt.want)
+		}
+	}
+}
+
 func TestHandleConflict(t *testing.T) {
 	type testRule struct {
 		method string

@@ -2,7 +2,7 @@
 // handlers using method- and path-based rules.
 //
 // Using hmux involves two phases: construction, using a Builder, and request
-// serving, using Mux.
+// serving, using a Mux.
 //
 //   b := hmux.NewBuilder()
 //   b.Get("/", handleIndex)
@@ -12,8 +12,8 @@
 //
 // Patterns
 //
-// Builder rules are registered using pattern strings to match URL paths in the
-// request URI.
+// Builder rules match methods and paths in request URIs. The path is matched
+// using a pattern string.
 //
 // A pattern begins with a slash ("/") and contains zero or more segments
 // separated by slashes.
@@ -64,7 +64,21 @@
 // pattern.
 //
 //   b.Handle("", "/x/:one", h1)
-//   b.Get("/x/:two", h2) // Panic! Pattern is already registered for all methods.
+//   b.Get("/x/:two", h2) // panic: pattern is already registered for all methods
+//
+// To avoid confusion, apart from wildcard patterns and the special pattern "*",
+// asterisks are not allowed in patterns. Additionally, a pattern segment cannot
+// be empty.
+//
+//   b.Get("/a*b", handler)  // panic: pattern contains *
+//   b.Get("/a//b", handler) // panic: pattern contains empty segment
+//
+// Literal pattern segments are interpeted as URL-escaped strings. Therefore, to
+// create a pattern which matches a path containing characters reserved for
+// pattern syntax, URL-encode those characters.
+//
+//   b.Get("/%3afoo", handler) // matches the path "/:foo"
+//   b.Get("/a/%2a", handler)  // matches the path "/a/*"
 //
 // Routing
 //
@@ -149,9 +163,6 @@
 //   	p.Wildcard()     // "/alfa/bravo"
 //   }
 //
-// TODO
-//
-// Escaping special characters
 package hmux
 
 import (
@@ -245,6 +256,8 @@ func (b *Builder) handle(method, pat string, h http.Handler) error {
 // Whether pat ends with * or not, Prefix interprets it as a wildcard pattern.
 // So the example above would be the same whether the pattern had been given as
 // "/sub", "/sub/", or "/sub/*".
+//
+// The pattern cannot be "" or "*" when calling Prefix.
 func (b *Builder) Prefix(pat string, h http.Handler) {
 	if h == nil {
 		panic("hmux: Prefix called with nil handler")
@@ -252,6 +265,12 @@ func (b *Builder) Prefix(pat string, h http.Handler) {
 	p, err := parsePattern(pat)
 	if err != nil {
 		panic("hmux: " + err.Error())
+	}
+	switch p.opt {
+	case patEmpty:
+		panic("hmux: Prefix called with empty pattern")
+	case patStar:
+		panic("hmux: Prefix called with pattern *")
 	}
 	p.opt = patWildcard
 	ph := prefixHandler{

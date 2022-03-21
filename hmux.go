@@ -21,7 +21,7 @@
 // In the simplest case, the pattern matches a single route because each segment
 // is a literal string:
 //
-//   b.Get("/home/about", hmux.ServeFile("about.html"))
+//   b.Get("/home/about", http.ServeFile("about.html"))
 //
 // A pattern segment may instead contain a parameter, which begins with a colon:
 //

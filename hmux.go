@@ -344,7 +344,7 @@ func (b *Builder) handleServeFile(pat, name string) error {
 	return nil
 }
 
-// ServeFS serves files from fsys at a prefix pattern.
+// ServeFS serves files from fsys at a prefix pattern using http.FileServer.
 //
 // Like Prefix, the pattern prefix is removed from the beginning of the path
 // before lookup in fsys.

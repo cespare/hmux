@@ -17,3 +17,6 @@
   - httprouter doesn't seem to have any facility to help with this.
   - chi provides the `GetHead` middleware which routes HEAD requests (if they
     don't already match) to a matching GET route.
+* Provide some way of getting the original match pattern
+  - use case: a middleware to emit prometheus metrics for each request broken
+    down by route

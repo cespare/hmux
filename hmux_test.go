@@ -69,7 +69,7 @@ func TestMatchingPriorities(t *testing.T) {
 		pat    string
 		h      http.HandlerFunc
 	}
-	var rules = []testRule{
+	rules := []testRule{
 		{"GET", "/", testHandler("index")},
 		{"GET", "/x", testHandler("/x")},
 		{"POST", "/x", testHandler("post /x")},

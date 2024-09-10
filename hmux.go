@@ -4,13 +4,13 @@
 // Using hmux involves two phases: construction, using a Builder, and request
 // serving, using a Mux.
 //
-//   b := hmux.NewBuilder()
-//   b.Get("/", handleIndex)
-//   ...
-//   mux := b.Build()
-//   http.ListenAndServe(addr, mux)
+//	b := hmux.NewBuilder()
+//	b.Get("/", handleIndex)
+//	...
+//	mux := b.Build()
+//	http.ListenAndServe(addr, mux)
 //
-// Patterns
+// # Patterns
 //
 // Builder rules match methods and paths in request URLs. The path is matched
 // using a pattern string.
@@ -21,17 +21,17 @@
 // In the simplest case, the pattern matches a single route because each segment
 // is a literal string:
 //
-//   b.Get("/home/about", http.ServeFile("about.html"))
+//	b.Get("/home/about", http.ServeFile("about.html"))
 //
 // A pattern segment may instead contain a parameter, which begins with a colon:
 //
-//   b.Get("/teams/:team/users/:username", serveUser)
+//	b.Get("/teams/:team/users/:username", serveUser)
 //
 // This pattern matches many different URL paths:
 //
-//   /teams/llamas/users/bob
-//   /teams/45/users/92
-//   ...
+//	/teams/llamas/users/bob
+//	/teams/45/users/92
+//	...
 //
 // A pattern may end with a slash; it only matches URL paths that also end with
 // a slash.
@@ -39,15 +39,15 @@
 // A "wildcard" pattern has a segment containing only * at the end (after the
 // final slash):
 //
-//   b.Get("/lookup/:db/*", handleLookup)
+//	b.Get("/lookup/:db/*", handleLookup)
 //
 // This matches any path beginning with the same prefix of segments:
 //
-//   /lookup/miami/a/b/c
-//   /lookup/frankfurt/568739
-//   /lookup/tokyo/
-//   /lookup/
-//   (but not /lookup)
+//	/lookup/miami/a/b/c
+//	/lookup/frankfurt/568739
+//	/lookup/tokyo/
+//	/lookup/
+//	(but not /lookup)
 //
 // Wildcard patterns are especially useful in conjunction with Builder.Prefix
 // and Builder.ServeFS, which always treat their inputs as wildcard patterns
@@ -63,24 +63,24 @@
 // A Builder does not accept two rules with overlapping methods and the same
 // pattern.
 //
-//   b.Handle("", "/x/:one", h1)
-//   b.Get("/x/:two", h2) // panic: pattern is already registered for all methods
+//	b.Handle("", "/x/:one", h1)
+//	b.Get("/x/:two", h2) // panic: pattern is already registered for all methods
 //
 // To avoid confusion, apart from wildcard patterns and the special pattern "*",
 // asterisks are not allowed in patterns. Additionally, a pattern segment cannot
 // be empty.
 //
-//   b.Get("/a*b", handler)  // panic: pattern contains *
-//   b.Get("/a//b", handler) // panic: pattern contains empty segment
+//	b.Get("/a*b", handler)  // panic: pattern contains *
+//	b.Get("/a//b", handler) // panic: pattern contains empty segment
 //
 // Literal pattern segments are interpeted as URL-escaped strings. Therefore, to
 // create a pattern which matches a path containing characters reserved for
 // pattern syntax, URL-encode those characters.
 //
-//   b.Get("/%3afoo", handler) // matches the path "/:foo"
-//   b.Get("/a/%2a", handler)  // matches the path "/a/*"
+//	b.Get("/%3afoo", handler) // matches the path "/:foo"
+//	b.Get("/a/%2a", handler)  // matches the path "/a/*"
 //
-// Routing
+// # Routing
 //
 // A Mux routes requests to the handler registered by the most specific rule
 // that matches the request's path and method. When comparing two rules,
@@ -92,29 +92,29 @@
 // starting from the beginning. The types of segments, arranged from most to
 // least specific, are:
 //
-//   * literal ("/a")
-//   * int32 parameter ("/:p:int32")
-//   * int64 parameter ("/:p:int64")
-//   * string parameter ("/:p")
+//   - literal ("/a")
+//   - int32 parameter ("/:p:int32")
+//   - int64 parameter ("/:p:int64")
+//   - string parameter ("/:p")
 //
 // For two patterns having the same segment specificity, a pattern ending with
 // slash is more specific than a pattern ending with a wildcard.
 //
 // As an example, suppose there are five rules:
 //
-//   b.Get("/x/y", handlerA)
-//   b.Get("/x/:p:int32", handlerB)
-//   b.Get("/x/:p", handlerC)
-//   b.Get("/:p/y", handlerD)
-//   b.Handle("", "/x/y", handlerE)
+//	b.Get("/x/y", handlerA)
+//	b.Get("/x/:p:int32", handlerB)
+//	b.Get("/x/:p", handlerC)
+//	b.Get("/:p/y", handlerD)
+//	b.Handle("", "/x/y", handlerE)
 //
 // Requests are routed as follows:
 //
-//   GET /x/y   handlerA
-//   GET /x/3   handlerB
-//   GET /x/z   handlerC
-//   GET /y/y   handlerD
-//   POST /x/y  handlerE
+//	GET /x/y   handlerA
+//	GET /x/3   handlerB
+//	GET /x/z   handlerC
+//	GET /y/y   handlerD
+//	POST /x/y  handlerE
 //
 // If a request matches the patterns of one or more rules but does not match the
 // methods of any of those rules, the Mux writes an HTTP 405 ("Method Not
@@ -128,17 +128,17 @@
 // a double slash), ".", or "..", the Mux writes an HTTP 308 redirect to an
 // equivalent cleaned path. For example, all of these are redirected to /x/y:
 //
-//   /x//y
-//   /x/./y
-//   /x/y/z/..
+//	/x//y
+//	/x/./y
+//	/x/y/z/..
 //
 // This automatic redirection does not apply to CONNECT requests.
 //
-// Parameters
+// # Parameters
 //
 // Pattern segments may specify a type after a second colon:
 //
-//   b.Post("/employees/:username:string", handleUpdateEmployee)
+//	b.Post("/employees/:username:string", handleUpdateEmployee)
 //
 // A string parameter matches any URL path segment, and it is also the default
 // type if no parameter type is given.
@@ -147,21 +147,20 @@
 // integer type matches the corresponding request URL path segment if that
 // segment can be parsed as a decimal integer of that type.
 //
-//   b.Get("/inventory/:itemid:int64/price", handlePrice)
+//	b.Get("/inventory/:itemid:int64/price", handlePrice)
 //
 // Parameters are passed to HTTP handlers using http.Request.Context. Inside an
 // HTTP handler called by a Mux, parameters are available via RequestParams.
 //
-//   b.Get("/:region/:shard:int64/*", handleLookup)
-//   ...
-//   func handleLookup(w http.ResponseWriter, r *http.Request) {
-//   	p := hmux.RequestParams(r)
-//   	// Suppose we get a URL path of /west/39/alfa/bravo
-//   	p.Get("region")  // "west"
-//   	p.Int64("shard") // 39
-//   	p.Wildcard()     // "/alfa/bravo"
-//   }
-//
+//	b.Get("/:region/:shard:int64/*", handleLookup)
+//	...
+//	func handleLookup(w http.ResponseWriter, r *http.Request) {
+//		p := hmux.RequestParams(r)
+//		// Suppose we get a URL path of /west/39/alfa/bravo
+//		p.Get("region")  // "west"
+//		p.Int64("shard") // 39
+//		p.Wildcard()     // "/alfa/bravo"
+//	}
 package hmux
 
 import (
@@ -247,7 +246,7 @@ func (b *Builder) handle(method, pat string, h http.Handler) error {
 //
 // For example, suppose this method is called as
 //
-//   b.Prefix("/sub", h)
+//	b.Prefix("/sub", h)
 //
 // Then if a request arrives with the path "/sub/x/y", the handler h sees a
 // request with a path "/x/y".
@@ -701,10 +700,10 @@ const (
 // A matchResult indicates how a matcher matches (or fails to match) a request.
 // There are three possibilities:
 //
-// 1. If the matcher matches the path and the method, h and p are set.
-// 2. If the matcher matches the path but not the method, allow is set to
-//    indicate the Allow header in the 405 response.
-// 3. If the matcher doesn't match at all, match returns noMatch.
+//  1. If the matcher matches the path and the method, h and p are set.
+//  2. If the matcher matches the path but not the method, allow is set to
+//     indicate the Allow header in the 405 response.
+//  3. If the matcher doesn't match at all, match returns noMatch.
 type matchResult struct {
 	h     http.Handler
 	p     *Params
@@ -922,11 +921,11 @@ func (p *Params) get(name string) param {
 //
 // For example, if a rule is registered as
 //
-//   mux.Get("/products/:name", handleProduct)
+//	mux.Get("/products/:name", handleProduct)
 //
 // then the product name may be retrieved inside handleProduct with
 //
-//   p.Get("name")
+//	p.Get("name")
 //
 // Note that, by construction, a parameter value cannot be empty, so Get never
 // returns the empty string.
@@ -943,12 +942,11 @@ func (p *Params) Get(name string) string {
 //
 // For example, if a rule is registered as
 //
-//   mux.Get("/customers/:id:int32", handleCustomer)
+//	mux.Get("/customers/:id:int32", handleCustomer)
 //
 // then the customer ID may be retrieved as an int inside handleCustomer with
 //
-//   p.Int("id")
-//
+//	p.Int("id")
 func (p *Params) Int(name string) int {
 	pp := p.get(name)
 	switch pp.typ {
@@ -965,12 +963,11 @@ func (p *Params) Int(name string) int {
 //
 // For example, if a rule is registered as
 //
-//   mux.Get("/customers/:id:int32", handleCustomer)
+//	mux.Get("/customers/:id:int32", handleCustomer)
 //
 // then the customer ID may be retrieved inside handleCustomer with
 //
-//   p.Int32("id")
-//
+//	p.Int32("id")
 func (p *Params) Int32(name string) int32 {
 	pp := p.get(name)
 	if pp.typ != paramInt32 {
@@ -985,12 +982,11 @@ func (p *Params) Int32(name string) int32 {
 //
 // For example, if a rule is registered as
 //
-//   mux.Get("/posts/:id:int64", handlePost)
+//	mux.Get("/posts/:id:int64", handlePost)
 //
 // then the post ID may be retrieved inside handlePost with
 //
-//   p.Int64("id")
-//
+//	p.Int64("id")
 func (p *Params) Int64(name string) int64 {
 	pp := p.get(name)
 	switch pp.typ {
@@ -1006,7 +1002,7 @@ func (p *Params) Int64(name string) int64 {
 //
 // For example, if a rule is registered as
 //
-//   mux.Get("/static/*", handleStatic)
+//	mux.Get("/static/*", handleStatic)
 //
 // and an incoming GET request for "/static/styles/site.css" matches this rule,
 // then p.Wildcard() gives "styles/site.css".
